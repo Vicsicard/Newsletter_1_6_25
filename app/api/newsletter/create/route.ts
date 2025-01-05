@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       .from('newsletters')
       .insert([{
         company_id: body.company_id,
-        subject: `${body.subject} - ${new Date().toISOString().split('T')[0]}`,
+        subject: `${body.subject} - ${new Date().toLocaleDateString('en-US')}`,
         status: 'draft',
         draft_status: 'draft',
         draft_recipient_email: body.draft_recipient_email
