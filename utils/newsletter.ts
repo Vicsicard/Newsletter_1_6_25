@@ -9,7 +9,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 // Use database types
 type NewsletterSectionInsert = Database['public']['Tables']['newsletter_sections']['Insert'];
 type NewsletterSectionRow = Database['public']['Tables']['newsletter_sections']['Row'];
-type QueueItem = Database['public']['Tables']['newsletter_generation_queue']['Row']
+type QueueItem = Database['public']['Tables']['newsletter_generation_queue']['Row'];
 
 interface GenerateOptions {
   companyName: string;
@@ -60,7 +60,9 @@ async function validateOpenAIKey() {
 }
 
 async function callOpenAIWithRetry(messages: any[], retries = 5, delay = 60000): Promise<string> {
-  const openai = new OpenAI();
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  });
   
   for (let i = 0; i < retries; i++) {
     try {
@@ -378,7 +380,7 @@ export async function generateNewsletter(
           role: "user",
           content: `${prompt} for ${options.companyName}, a ${options.industry} company targeting ${options.targetAudience || 'general audience'}. 
           Make it engaging and actionable. Include a title for this section.`
-        }));
+        }];
 
         console.log(`Generated content for section ${config.sectionNumber}:`, response.substring(0, 100) + '...');
 
@@ -480,25 +482,18 @@ interface NewsletterSectionContent {
 }
 
 export function formatNewsletterHtml(sections: NewsletterSectionContent[]): string {
-  const sectionHtml = sections.map(section => `
-    <div style="margin-bottom: 30px;">
-      <h2 style="color: #333; font-size: 24px; margin-bottom: 15px;">${section.title}</h2>
-      ${section.imageUrl ? `<img src="${section.imageUrl}" alt="${section.title}" style="max-width: 100%; height: auto; margin-bottom: 15px;">` : ''}
-      <div style="color: #555; font-size: 16px; line-height: 1.6;">
-        ${section.content}
-      </div>
-    </div>
-  `).join('");
-
   return `
     <!DOCTYPE html>
     <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      </head>
-      <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        ${sectionHtml}
+      <body>
+        ${sections.map(section => `
+          <div class="section">
+            <h2>${section.title}</h2>
+            <div class="content">
+              ${section.content}
+            </div>
+          </div>
+        `).join('')}
       </body>
     </html>
   `;

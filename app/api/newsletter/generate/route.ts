@@ -19,7 +19,7 @@ interface GenerateRequest {
 
 export async function POST(req: Request) {
   const supabaseAdmin = getSupabaseAdmin();
-  
+
   try {
     const body = await req.json() as GenerateRequest;
     const { newsletterId, prompt, sections } = body;
@@ -50,9 +50,27 @@ export async function POST(req: Request) {
     // If sections are provided, use those instead of generating new ones
     let generatedSections;
     if (sections) {
+      // Insert provided sections
+      const { error: insertError } = await supabaseAdmin
+        .from('newsletter_sections')
+        .insert(
+          sections.map((section, index) => ({
+            newsletter_id: newsletterId,
+            section_number: index + 1,
+            title: section.title,
+            content: section.content,
+            image_prompt: section.image_prompt,
+            status: 'completed'
+          }))
+        );
+
+      if (insertError) {
+        throw new APIError('Failed to insert sections', 500);
+      }
+
       generatedSections = sections;
     } else {
-      // Generate sections using OpenAI
+      // Generate new sections using OpenAI
       generatedSections = await generateNewsletter(
         newsletterId,
         prompt,
@@ -65,39 +83,20 @@ export async function POST(req: Request) {
       );
     }
 
-    // Update newsletter sections
-    const { error: updateError } = await supabaseAdmin
-      .from('newsletter_sections')
-      .upsert(
-        generatedSections.map((section, index) => ({
-          newsletter_id: newsletterId,
-          section_number: index + 1,
-          title: section.title,
-          content: section.content,
-          image_prompt: section.image_prompt || null,
-          image_url: null, // Reset image URL since we're generating new content
-          status: 'active'
-        }))
-      );
+    return NextResponse.json({ sections: generatedSections });
+  } catch (error: any) {
+    console.error('Error generating newsletter:', error);
 
-    if (updateError) {
-      throw new APIError('Failed to update newsletter sections', 500);
+    if (error instanceof APIError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.statusCode }
+      );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        sections: generatedSections
-      }
-    });
-  } catch (error) {
-    console.error('Error generating newsletter:', error);
     return NextResponse.json(
-      {
-        success: false,
-        message: error instanceof Error ? error.message : 'Internal server error'
-      },
-      { status: error instanceof APIError ? error.statusCode : 500 }
+      { error: 'Failed to generate newsletter' },
+      { status: 500 }
     );
   }
 }
