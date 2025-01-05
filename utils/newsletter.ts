@@ -9,7 +9,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 // Use database types
 type NewsletterSectionInsert = Database['public']['Tables']['newsletter_sections']['Insert'];
 type NewsletterSectionRow = Database['public']['Tables']['newsletter_sections']['Row'];
-type QueueItem = Database['public']['Tables']['newsletter_generation_queue']['Row'];
+type QueueItem = Database['public']['Tables']['newsletter_generation_queue']['Row']
 
 interface GenerateOptions {
   companyName: string;
@@ -378,7 +378,7 @@ export async function generateNewsletter(
           role: "user",
           content: `${prompt} for ${options.companyName}, a ${options.industry} company targeting ${options.targetAudience || 'general audience'}. 
           Make it engaging and actionable. Include a title for this section.`
-        }]);
+        }));
 
         console.log(`Generated content for section ${config.sectionNumber}:`, response.substring(0, 100) + '...');
 
@@ -488,7 +488,7 @@ export function formatNewsletterHtml(sections: NewsletterSectionContent[]): stri
         ${section.content}
       </div>
     </div>
-  `).join('');
+  `).join('");
 
   return `
     <!DOCTYPE html>
@@ -502,6 +502,15 @@ export function formatNewsletterHtml(sections: NewsletterSectionContent[]): stri
       </body>
     </html>
   `;
+}
+
+// Format newsletter subject consistently across the application
+export function formatNewsletterSubject(companyName: string, date: Date = new Date()): string {
+  return `Newsletter for ${companyName} - ${date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })}`;
 }
 
 export async function validateEmailList(emails: string[]) {

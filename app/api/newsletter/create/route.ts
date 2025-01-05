@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { formatNewsletterSubject } from '@/utils/newsletter';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -38,11 +39,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Extract company name from subject (removes "Newsletter for " prefix)
+    const companyName = body.subject.replace('Newsletter for ', '');
+    
     const { data: newsletter, error } = await supabase
       .from('newsletters')
       .insert([{
         company_id: body.company_id,
-        subject: `${body.subject} - ${new Date().toLocaleDateString('en-US')}`,
+        subject: formatNewsletterSubject(companyName),
         status: 'draft',
         draft_status: 'draft',
         draft_recipient_email: body.draft_recipient_email
