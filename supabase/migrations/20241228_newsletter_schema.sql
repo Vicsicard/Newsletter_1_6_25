@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS companies (
     target_audience TEXT,
     audience_description TEXT,
     contact_email TEXT NOT NULL,
+    website_url TEXT, -- Accepts any text format, no URL validation required
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

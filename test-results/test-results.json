@@ -48,7 +48,7 @@
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"
         ],
-        "timeout": 0
+        "timeout": 60000
       }
     ],
     "shard": null,
@@ -77,7 +77,7 @@
               "tags": [],
               "tests": [
                 {
-                  "timeout": 0,
+                  "timeout": 60000,
                   "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "chromium",
@@ -85,21 +85,95 @@
                   "results": [
                     {
                       "workerIndex": 0,
-                      "status": "skipped",
-                      "duration": 0,
+                      "status": "passed",
+                      "duration": 11738,
                       "errors": [],
                       "stdout": [
                         {
                           "text": "Navigating to homepage...\n"
+                        },
+                        {
+                          "text": "Page loaded\n"
+                        },
+                        {
+                          "text": "Starting form submission test...\n"
+                        },
+                        {
+                          "text": "Filling required fields...\n"
+                        },
+                        {
+                          "text": "Filling optional fields...\n"
+                        },
+                        {
+                          "text": "Taking pre-submission screenshot...\n"
+                        },
+                        {
+                          "text": "Submitting form...\n"
+                        },
+                        {
+                          "text": "Browser console: log: Form submission started\n"
+                        },
+                        {
+                          "text": "Browser console: log: Form validated, proceeding with submission\n"
+                        },
+                        {
+                          "text": "Browser console: log: Creating company...\n"
+                        },
+                        {
+                          "text": "Network request: POST http://localhost:3001/api/company/create\n"
+                        },
+                        {
+                          "text": "Form submitted\n"
+                        },
+                        {
+                          "text": "Waiting for first success modal...\n"
+                        },
+                        {
+                          "text": "Clicking close button on success modal...\n"
+                        },
+                        {
+                          "text": "Network response: 200 http://localhost:3001/api/company/create\n"
+                        },
+                        {
+                          "text": "Browser console: log: Company created: [Object]\n"
+                        },
+                        {
+                          "text": "Network request: POST http://localhost:3001/api/newsletter/create\n"
+                        },
+                        {
+                          "text": "Network response: 500 http://localhost:3001/api/newsletter/create\n"
+                        },
+                        {
+                          "text": "Browser console: error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)\n"
+                        },
+                        {
+                          "text": "Browser console: error: Failed to create newsletter: {\"error\":\"Failed to create newsletter\"}\n"
+                        },
+                        {
+                          "text": "Waiting for one-submission limit screen...\n"
+                        },
+                        {
+                          "text": "Taking post-submission screenshot...\n"
                         }
                       ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-01-03T21:04:15.967Z",
-                      "attachments": []
+                      "startTime": "2025-01-05T19:13:06.100Z",
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-6979d-ully-submit-onboarding-form-chromium\\test-finished-1.png"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-6979d-ully-submit-onboarding-form-chromium\\trace.zip"
+                        }
+                      ]
                     }
                   ],
-                  "status": "skipped"
+                  "status": "expected"
                 }
               ],
               "id": "71b6f7556e01136dd800-75f7d6b17bd6363e8b54",
@@ -108,63 +182,127 @@
               "column": 7
             },
             {
+              "title": "should validate form fields",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 7517,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "Navigating to homepage...\n"
+                        },
+                        {
+                          "text": "Page loaded\n"
+                        },
+                        {
+                          "text": "Starting validation test...\n"
+                        },
+                        {
+                          "text": "Testing invalid email...\n"
+                        },
+                        {
+                          "text": "Browser console: log: Form submission started\n"
+                        },
+                        {
+                          "text": "Browser console: log: Validation errors found: {contact_email: Please enter a valid email address}\n"
+                        },
+                        {
+                          "text": "Validation errors: [ \u001b[32m'Please enter a valid email address'\u001b[39m ]\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-01-05T19:13:18.497Z",
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-Tests-should-validate-form-fields-chromium\\test-finished-1.png"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-Tests-should-validate-form-fields-chromium\\trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "71b6f7556e01136dd800-8a03b9f8d447c61298c2",
+              "file": "onboarding.test.ts",
+              "line": 85,
+              "column": 7
+            },
+            {
               "title": "should show validation errors for missing required fields",
               "ok": true,
               "tags": [],
               "tests": [
                 {
-                  "timeout": 0,
+                  "timeout": 60000,
                   "annotations": [],
                   "expectedStatus": "passed",
                   "projectId": "chromium",
                   "projectName": "chromium",
-                  "results": [],
-                  "status": "skipped"
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 4146,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "Navigating to homepage...\n"
+                        },
+                        {
+                          "text": "Page loaded\n"
+                        },
+                        {
+                          "text": "Starting missing fields validation test...\n"
+                        },
+                        {
+                          "text": "Browser console: log: Form submission started\n"
+                        },
+                        {
+                          "text": "Browser console: log: Validation errors found: {company_name: Company name is required, industry: Industry is required, contact_email: Contact email is required, target_audience: Target audience is required}\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-01-05T19:13:26.105Z",
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-80b90-for-missing-required-fields-chromium\\test-finished-1.png"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-80b90-for-missing-required-fields-chromium\\trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
                 }
               ],
               "id": "71b6f7556e01136dd800-a9de562dd9a50c005d1f",
               "file": "onboarding.test.ts",
-              "line": 107,
-              "column": 7
-            },
-            {
-              "title": "should validate email format",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 0,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "chromium",
-                  "projectName": "chromium",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "71b6f7556e01136dd800-9cd6347086ea0da7ce7c",
-              "file": "onboarding.test.ts",
-              "line": 125,
-              "column": 7
-            },
-            {
-              "title": "should validate website URL format",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 0,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "chromium",
-                  "projectName": "chromium",
-                  "results": [],
-                  "status": "skipped"
-                }
-              ],
-              "id": "71b6f7556e01136dd800-185d1cc005fc6f4f8694",
-              "file": "onboarding.test.ts",
-              "line": 148,
+              "line": 110,
               "column": 7
             }
           ]
@@ -172,19 +310,12 @@
       ]
     }
   ],
-  "errors": [
-    {
-      "message": "\u001b[31mTimed out waiting 60s for the test suite to run\u001b[39m"
-    },
-    {
-      "message": "\u001b[31mTimed out waiting 60s for the teardown for test suite to run\u001b[39m"
-    }
-  ],
+  "errors": [],
   "stats": {
-    "startTime": "2025-01-03T21:04:14.711Z",
-    "duration": 60016.723,
-    "expected": 0,
-    "skipped": 4,
+    "startTime": "2025-01-05T19:13:04.962Z",
+    "duration": 25776.307,
+    "expected": 3,
+    "skipped": 0,
     "unexpected": 0,
     "flaky": 0
   }

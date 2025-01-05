@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2019",
+    "types": ["node", "@playwright/test"]
+  },
+  "include": ["./**/*", "../playwright.config.ts"],
+  "exclude": ["node_modules"]
+}

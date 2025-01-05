@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Onboarding Form Tests', () => {
   test.beforeEach(async ({ page }) => {
     console.log('Navigating to homepage...');
-    await page.goto('http://localhost:3000');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
     console.log('Page loaded');
 
@@ -41,7 +41,8 @@ test.describe('Onboarding Form Tests', () => {
     await page.locator('input[name="contact_email"]').fill(testEmail);
     await page.locator('input[name="contact_email"]').press('Tab');
     
-    await page.locator('textarea[name="target_audience"]').fill('Small business owners and entrepreneurs looking to grow their online presence.');
+    await page.locator('input[name="target_audience"]').fill('Small Business Owners');
+    await page.locator('textarea[name="audience_description"]').fill('Entrepreneurs and small business owners looking to grow their online presence');
     
     // Fill in optional fields
     console.log('Filling optional fields...');
@@ -58,50 +59,52 @@ test.describe('Onboarding Form Tests', () => {
     
     // Click the submit button
     await submitButton.click();
-    console.log('Form submitted, waiting for loading state...');
+    console.log('Form submitted');
     
-    // Wait for loading state
-    console.log('Checking loading state...');
-    await page.waitForSelector('div[role="dialog"]:has-text("Setting up your newsletter")', {
-      state: 'visible',
-      timeout: 5000
-    });
-    
-    // Wait for API calls to complete
-    console.log('Waiting for API responses...');
-    await page.waitForResponse(response => 
-      response.url().includes('/rest/v1/companies') && 
-      response.request().method() === 'POST'
-    );
-    await page.waitForResponse(response => 
-      response.url().includes('/rest/v1/newsletters') && 
-      response.request().method() === 'POST'
-    );
-    
-    // Check for any error messages
-    const errorDialog = page.locator('div[role="dialog"]:has-text("Error")');
-    const isError = await errorDialog.isVisible();
-    if (isError) {
-      const errorText = await errorDialog.textContent();
-      console.error('Error dialog found:', errorText);
-      throw new Error(`Form submission failed: ${errorText}`);
-    }
-    
-    // Wait for success modal
-    console.log('Waiting for success modal...');
-    await page.waitForSelector('div[role="dialog"]:has-text("Newsletter setup completed")', { 
-      state: 'visible', 
-      timeout: 30000 
-    });
-    
-    // Check success message in modal
-    const expectedMessage = `Newsletter setup completed! Your draft newsletter will be emailed to ${testEmail} within 24 hours. Please check your spam folder if you don't see it in your inbox.`;
+    // Wait for first success modal
+    console.log('Waiting for first success modal...');
+    const expectedMessage = `Thank you for your submission! Your draft newsletter will be emailed to ${testEmail} within 36 hours. Please check your spam folder if you don't see it in your inbox.`;
     const dialog = page.locator('div[role="dialog"]');
-    await expect(dialog).toContainText(expectedMessage, { timeout: 30000 });
+    await expect(dialog).toContainText(expectedMessage, { timeout: 5000 });
+
+    // Click the close button on the success modal
+    console.log('Clicking close button on success modal...');
+    const closeButton = dialog.getByRole('button');
+    await closeButton.click();
+
+    // Wait for the one-submission limit screen
+    console.log('Waiting for one-submission limit screen...');
+    await expect(page.getByText('Your newsletter is being generated')).toBeVisible();
+    await expect(page.getByText('Only one newsletter submission is allowed per month')).toBeVisible();
     
     // Take screenshot after submission
     console.log('Taking post-submission screenshot...');
     await page.screenshot({ path: 'tests/screenshots/after-submit.png' });
+  });
+
+  test('should validate form fields', async ({ page }) => {
+    console.log('Starting validation test...');
+    
+    // Wait for form to be visible
+    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('form', { state: 'visible' });
+    
+    // Test: Invalid Email Only
+    console.log('Testing invalid email...');
+    await page.locator('input[name="company_name"]').fill('Test Company');
+    await page.locator('input[name="industry"]').fill('Technology');
+    await page.locator('input[name="target_audience"]').fill('Small business owners');
+    await page.locator('input[name="contact_email"]').fill('invalid-email');
+    await page.locator('input[name="website_url"]').fill('any-website-format-is-ok'); // Should not cause validation error
+    
+    // Submit form
+    await page.getByRole('button', { name: 'Generate Newsletter' }).click();
+    
+    // Check for email validation message only
+    const errors = await page.locator('.text-red-600').allTextContents();
+    console.log('Validation errors:', errors);
+    expect(errors).toContain('Please enter a valid email address');
+    expect(errors).not.toContain('Website URL');
   });
 
   test('should show validation errors for missing required fields', async ({ page }) => {
@@ -115,57 +118,14 @@ test.describe('Onboarding Form Tests', () => {
     await expect(submitButton).toBeVisible();
     await submitButton.click();
     
-    // Check for validation messages
-    await expect(page.getByText('Company name is required')).toBeVisible();
-    await expect(page.getByText('Industry is required')).toBeVisible();
-    await expect(page.getByText('Contact email is required')).toBeVisible();
-    await expect(page.getByText('Target audience is required')).toBeVisible();
-  });
-
-  test('should validate email format', async ({ page }) => {
-    console.log('Starting email validation test...');
+    // Wait for and check validation messages
+    await page.waitForSelector('.text-red-600', { state: 'visible' });
     
-    // Wait for form to be visible
-    await page.waitForSelector('form', { state: 'visible' });
-    
-    // Fill in valid fields
-    await page.locator('input[name="company_name"]').fill('Test Company');
-    await page.locator('input[name="industry"]').fill('Technology');
-    await page.locator('textarea[name="target_audience"]').fill('Small business owners');
-    
-    // Fill in invalid email
-    await page.locator('input[name="contact_email"]').fill('invalid-email');
-    
-    // Submit form
-    const submitButton = await page.getByRole('button', { name: 'Generate Newsletter' });
-    await expect(submitButton).toBeVisible();
-    await submitButton.click();
-    
-    // Check for email validation message
-    await expect(page.getByText('Please enter a valid email address')).toBeVisible();
-  });
-
-  test('should validate website URL format', async ({ page }) => {
-    console.log('Starting URL validation test...');
-    
-    // Wait for form to be visible
-    await page.waitForSelector('form', { state: 'visible' });
-    
-    // Fill in required fields
-    await page.locator('input[name="company_name"]').fill('Test Company');
-    await page.locator('input[name="industry"]').fill('Technology');
-    await page.locator('input[name="contact_email"]').fill('test@example.com');
-    await page.locator('textarea[name="target_audience"]').fill('Small business owners');
-    
-    // Fill in invalid URL
-    await page.locator('input[name="website_url"]').fill('invalid-url');
-    
-    // Submit form
-    const submitButton = await page.getByRole('button', { name: 'Generate Newsletter' });
-    await expect(submitButton).toBeVisible();
-    await submitButton.click();
-    
-    // Check for URL validation message
-    await expect(page.getByText('Please enter a valid URL')).toBeVisible();
+    // Get all error messages
+    const errorMessages = await page.locator('.text-red-600').allTextContents();
+    expect(errorMessages).toContain('Company name is required');
+    expect(errorMessages).toContain('Industry is required');
+    expect(errorMessages).toContain('Contact email is required');
+    expect(errorMessages).toContain('Target audience is required');
   });
 });

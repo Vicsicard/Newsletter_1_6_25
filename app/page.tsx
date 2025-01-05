@@ -3,13 +3,11 @@
 import { useState, FormEvent, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { validateForm } from '@/utils/validation';
-import LoadingModal from '@/components/LoadingModal';
 import SuccessModal from '@/components/SuccessModal';
 import { FormErrors } from '@/types/form';
 
 export default function Home() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [formErrors, setFormErrors] = useState<FormErrors>({});
@@ -65,7 +63,6 @@ export default function Home() {
 
     // Reset states and show success immediately after validation
     console.log('Form validated, proceeding with submission');
-    setIsLoading(true);
     setFormErrors({});
     
     // Get the contact email for the success message
@@ -74,26 +71,22 @@ export default function Home() {
     
     // Show success message immediately after validation
     setSuccess(`Thank you for your submission! Your draft newsletter will be emailed to ${contactEmail} within 36 hours. Please check your spam folder if you don't see it in your inbox.`);
-    localStorage.setItem('newsletterSubmitted', 'true');
-    setHasSubmitted(true);
     
     // Continue with the API calls in the background
     try {
-      console.log('Calling Supabase function...');
-      const response = await fetch('https://odjvatrrqyuspcjxlnki.supabase.co/rest/v1/companies', {
+      console.log('Creating company...');
+      const response = await fetch('/api/company/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-          'Prefer': 'return=representation'
         },
         body: JSON.stringify({
           company_name: formDataObj.company_name,
           website_url: formDataObj.website_url,
           industry: formDataObj.industry,
           contact_email: formDataObj.contact_email,
-          target_audience: formDataObj.target_audience
+          target_audience: formDataObj.target_audience,
+          audience_description: formDataObj.audience_description
         })
       });
 
@@ -102,13 +95,10 @@ export default function Home() {
         console.log('Company created:', company);
 
         // Create newsletter
-        const newsletterResponse = await fetch('https://odjvatrrqyuspcjxlnki.supabase.co/rest/v1/newsletters', {
+        const newsletterResponse = await fetch('/api/newsletter/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-            'Prefer': 'return=representation'
           },
           body: JSON.stringify({
             company_id: company[0].id,
@@ -131,17 +121,17 @@ export default function Home() {
     } catch (apiError) {
       // Log the error but don't show it to the user
       console.error('API error:', apiError);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleCloseModal = () => {
     setSuccess(null);
+    localStorage.setItem('newsletterSubmitted', 'true');
+    setHasSubmitted(true);
   };
 
   // Show submitted state if already submitted
-  if (hasSubmitted && !isLoading && !success) {
+  if (hasSubmitted) {
     return (
       <div className="min-h-screen bg-[#3366FF] py-6 flex flex-col justify-center">
         <div className="relative py-3 sm:max-w-xl sm:mx-auto">
@@ -186,7 +176,6 @@ export default function Home() {
                         type="text"
                         name="company_name"
                         id="company_name"
-                        required
                         placeholder="Enter your company name"
                         className={`mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-3 ${
                           formErrors.company_name ? 'border-red-500' : 'border-gray-300'
@@ -198,12 +187,12 @@ export default function Home() {
                     </div>
 
                     <div>
-                      <label htmlFor="website_url" className="block text-sm font-medium text-gray-700 mb-1">Website URL</label>
+                      <label htmlFor="website_url" className="block text-sm font-medium text-gray-700 mb-1">Website URL (optional)</label>
                       <input
-                        type="url"
+                        type="text"
                         name="website_url"
                         id="website_url"
-                        placeholder="https://your-company.com"
+                        placeholder="Your company website"
                         className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-3"
                       />
                     </div>
@@ -214,7 +203,6 @@ export default function Home() {
                         type="text"
                         name="industry"
                         id="industry"
-                        required
                         placeholder="Your industry"
                         className={`mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-3 ${
                           formErrors.industry ? 'border-red-500' : 'border-gray-300'
@@ -228,10 +216,9 @@ export default function Home() {
                     <div>
                       <label htmlFor="contact_email" className="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
                       <input
-                        type="email"
+                        type="text"
                         name="contact_email"
                         id="contact_email"
-                        required
                         placeholder="your@email.com"
                         className={`mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-3 ${
                           formErrors.contact_email ? 'border-red-500' : 'border-gray-300'
@@ -243,15 +230,38 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div>
-                    <label htmlFor="target_audience" className="block text-sm font-medium text-gray-700 mb-1">Target Audience</label>
-                    <textarea
-                      name="target_audience"
-                      id="target_audience"
-                      rows={3}
-                      placeholder="Describe your target audience"
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-3"
-                    />
+                  <div className="grid grid-cols-1 gap-6">
+                    <div>
+                      <label htmlFor="target_audience" className="block text-sm font-medium text-gray-700 mb-1">Target Audience</label>
+                      <input
+                        type="text"
+                        name="target_audience"
+                        id="target_audience"
+                        placeholder="Who is your target audience? (e.g., Small Business Owners)"
+                        className={`mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-3 ${
+                          formErrors.target_audience ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      />
+                      {formErrors.target_audience && (
+                        <p className="mt-2 text-sm text-red-600">{formErrors.target_audience}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="audience_description" className="block text-sm font-medium text-gray-700 mb-1">Audience Description</label>
+                      <textarea
+                        name="audience_description"
+                        id="audience_description"
+                        rows={3}
+                        placeholder="Describe your target audience in detail"
+                        className={`mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-3 ${
+                          formErrors.audience_description ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      />
+                      {formErrors.audience_description && (
+                        <p className="mt-2 text-sm text-red-600">{formErrors.audience_description}</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="pt-6">
@@ -269,7 +279,6 @@ export default function Home() {
         </div>
       </div>
 
-      <LoadingModal isOpen={isLoading} message="Setting up your newsletter..." onClose={() => {}} />
       <SuccessModal isOpen={!!success} message={success || ''} onClose={handleCloseModal} />
     </div>
   );

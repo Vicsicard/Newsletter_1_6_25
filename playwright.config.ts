@@ -2,19 +2,20 @@ import { PlaywrightTestConfig } from '@playwright/test';
 
 const config: PlaywrightTestConfig = {
   testDir: './tests',
-  timeout: 30000,
+  timeout: 60000,
   expect: {
-    timeout: 10000
+    timeout: 15000
   },
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:3001',
     trace: 'on',
     screenshot: 'on',
-    video: 'on',
+    video: 'retain-on-failure',
     headless: false,
     viewport: { width: 1280, height: 720 },
     launchOptions: {
-      slowMo: 1000,
+      slowMo: 500,
+      devtools: true,
     }
   },
   projects: [

@@ -11,11 +11,25 @@ export const validateForm = (formData: FormData): FormErrors => {
     target_audience: 'Target audience'
   }
 
+  // Optional fields that need validation if provided
+  const optionalFields = {
+    audience_description: 'Audience description',
+    website_url: 'Website URL'
+  }
+
   // Validate required fields
   for (const [field, label] of Object.entries(requiredFields)) {
     const value = formData.get(field) as string
     if (!value || value.trim() === '') {
       errors[field] = `${label} is required`
+    }
+  }
+
+  // Validate optional fields if provided
+  for (const [field, label] of Object.entries(optionalFields)) {
+    const value = formData.get(field) as string
+    if (value && value.trim() === '') {
+      errors[field] = `${label} cannot be empty`
     }
   }
 
@@ -25,10 +39,10 @@ export const validateForm = (formData: FormData): FormErrors => {
     errors.contact_email = 'Please enter a valid email address'
   }
 
-  // Validate website URL if provided
+  // Website URL is optional and accepts any format
   const websiteUrl = formData.get('website_url') as string
-  if (websiteUrl && !websiteUrl.startsWith('http')) {
-    errors.website_url = 'Please enter a valid URL starting with http:// or https://'
+  if (websiteUrl && websiteUrl.trim() === '') {
+    errors.website_url = 'Website URL cannot be empty if provided'
   }
 
   return errors
