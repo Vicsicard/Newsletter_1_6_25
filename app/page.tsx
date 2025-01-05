@@ -113,7 +113,17 @@ export default function Home() {
           const newsletter = await newsletterResponse.json();
           console.log('Newsletter created:', newsletter);
         } else {
-          console.error('Failed to create newsletter:', await newsletterResponse.text());
+          const errorData = await newsletterResponse.json();
+          console.error('Failed to create newsletter:', errorData);
+          
+          // If it's a time restriction error (429)
+          if (newsletterResponse.status === 429) {
+            setSuccess(null);
+            setFormErrors({
+              general: errorData.error
+            });
+            return;
+          }
         }
       } else {
         console.error('Failed to create company:', await response.text());
