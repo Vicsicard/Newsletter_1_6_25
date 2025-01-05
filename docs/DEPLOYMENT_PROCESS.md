@@ -303,321 +303,135 @@ vercel env ls
    - Implement proper authentication
    - Follow security best practices
 
-## Deployment Process Guide
+## Deployment Process
 
-### Prerequisites
+## Overview
+This document outlines the deployment process for the newsletter application. We use Vercel for hosting and Supabase for the database.
 
-1. Vercel CLI installed globally:
-   ```bash
-   npm install -g vercel
-   ```
+## Prerequisites
+- Vercel CLI installed
+- Supabase CLI installed
+- Access to production environment variables
+- GitHub repository access
 
-2. Node.js version >= 18.18.0
-3. Git repository connected to Vercel
-
-### Environment Variables
-
-The following environment variables must be set in your Vercel project:
-
+## Environment Variables
+Required environment variables in production:
 ```env
-OPENAI_API_KEY=your_openai_api_key
-BREVO_API_KEY=your_brevo_api_key
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+# Database
+DATABASE_URL=your_supabase_db_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SUPABASE_JWT_SECRET=your_jwt_secret
+
+# Email Service (Brevo)
+BREVO_API_KEY=your_api_key
+BREVO_SENDER_EMAIL=your_sender_email
+BREVO_SENDER_NAME=your_sender_name
+
+# OpenAI (for content generation)
+OPENAI_API_KEY=your_openai_key
+
+# Application
+NEXTAUTH_URL=your_app_url
+NEXTAUTH_SECRET=your_auth_secret
 ```
 
-### Deployment Steps
+## Deployment Steps
 
-1. **Prepare for Deployment**
-   - Ensure all changes are committed and pushed to the repository
-   - Verify all environment variables are set in Vercel
-   - Check the `vercel.json` configuration
+### 1. Pre-deployment Checks
+```bash
+# Run type checking
+npm run type-check
 
-2. **Database Migration**
-   - Apply any pending Supabase migrations:
-     ```bash
-     supabase db push
-     ```
+# Run tests
+npm run test
 
-3. **Deploy to Vercel**
-   ```bash
-   vercel --prod
-   ```
+# Run linting
+npm run lint
+```
 
-4. **Post-Deployment Verification**
-   - Check the deployment logs for any errors
-   - Verify API endpoints are functioning:
-     - `/api/newsletter/generate`
-     - `/api/newsletter/status/[id]`
-     - `/api/newsletter/send-draft/[id]`
-   - Test newsletter generation and email sending
-   - Monitor error logs and performance metrics
+### 2. Database Migration
+```bash
+# Generate migration
+npx supabase db diff -f migration_name
 
-### Monitoring and Maintenance
+# Apply migration
+npx supabase db push
+```
 
-#### Resource Limits
-- API Routes Memory: 1024MB for newsletter operations
-- Function Timeout: 60 seconds for generation, 10 seconds for status checks
-- Vercel Serverless Functions: Auto-scaling enabled
+### 3. Vercel Deployment
+```bash
+# Deploy to production
+vercel --prod
 
-#### Rate Limits
-- OpenAI API: Based on your plan
-- Brevo API: Check your subscription limits
-- Supabase: Monitor database connections
+# Deploy to preview (for testing)
+vercel
+```
 
-#### Error Handling
-- Check Vercel deployment logs
-- Monitor Supabase database errors
-- Track email delivery status
+### 4. Post-deployment Verification
+1. Check application health endpoint
+2. Verify database connections
+3. Test email sending functionality
+4. Monitor error rates
 
-### Rollback Process
+## Rollback Process
 
-If issues are detected after deployment:
+### 1. Code Rollback
+```bash
+# Revert to previous deployment
+vercel rollback
+```
 
-1. **Immediate Actions**
-   ```bash
-   vercel rollback
-   ```
+### 2. Database Rollback
+```bash
+# Revert last migration
+npx supabase db reset
+npx supabase db push --version previous
+```
 
-2. **Database Rollback**
-   - Use Supabase's point-in-time recovery if needed
-   - Revert any problematic migrations
+## Monitoring
 
-### Performance Optimization
+### 1. Application Metrics
+- Vercel Analytics Dashboard
+- Error tracking in Sentry
+- Custom application logs
 
-1. **API Optimization**
-   - Caching implemented for frequent requests
-   - Rate limiting for API endpoints
-   - Efficient database queries
+### 2. Database Metrics
+- Supabase Dashboard
+- Connection pool status
+- Query performance metrics
 
-2. **Resource Management**
-   - Memory limits set per function
-   - Timeout configurations optimized
-   - Database connection pooling
+### 3. Email Service
+- Brevo Dashboard
+- Delivery rates
+- Bounce rates
 
-### Troubleshooting Common Issues
+## Deployment Schedule
+- Regular deployments: Tuesday and Thursday
+- Emergency fixes: As needed
+- Database migrations: During off-peak hours
 
-1. **Build Failures**
-   - Check Node.js version compatibility
-   - Verify all dependencies are properly installed
-   - Review build logs for specific errors
+## Security Considerations
+1. Rotate API keys regularly
+2. Review environment variables
+3. Check for security vulnerabilities
+4. Monitor unusual activity
 
-2. **Runtime Errors**
-   - Monitor Vercel function logs
-   - Check API endpoint responses
-   - Verify environment variables
+## Troubleshooting
 
-3. **Database Issues**
-   - Check Supabase connection
-   - Verify database migrations
-   - Monitor query performance
+### Common Issues
+1. Database connection errors
+   - Check connection string
+   - Verify network access
 
-### Security Considerations
+2. Email sending failures
+   - Verify Brevo API key
+   - Check rate limits
 
-1. **API Security**
-   - All sensitive endpoints are protected
-   - Rate limiting implemented
-   - API keys properly secured
+3. OpenAI API issues
+   - Monitor rate limits
+   - Check API key permissions
 
-2. **Environment Variables**
-   - All sensitive data in environment variables
-   - Production secrets isolated
-   - Regular key rotation recommended
-
-### Contact and Support
-
-For deployment issues:
-1. Check Vercel status page
-2. Review application logs
-3. Contact support if needed
-
-<!-- AI-DEPLOYMENT-CONFIG
-{
-  "platform": "vercel",
-  "buildTool": "npm",
-  "projectType": "nextjs",
-  "nodeVersion": ">=18.18.0",
-  "requiredGlobalDependencies": [
-    {
-      "name": "vercel",
-      "installCommand": "npm install -g vercel"
-    }
-  ],
-  "requiredEnvVars": [
-    {
-      "name": "OPENAI_API_KEY",
-      "isPublic": false,
-      "required": true
-    },
-    {
-      "name": "SUPABASE_URL",
-      "isPublic": false,
-      "required": true
-    },
-    {
-      "name": "SUPABASE_SERVICE_ROLE_KEY",
-      "isPublic": false,
-      "required": true
-    },
-    {
-      "name": "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-      "isPublic": true,
-      "required": true
-    },
-    {
-      "name": "BREVO_API_KEY",
-      "isPublic": false,
-      "required": true
-    },
-    {
-      "name": "BREVO_SENDER_EMAIL",
-      "isPublic": false,
-      "required": true
-    },
-    {
-      "name": "BREVO_SENDER_NAME",
-      "isPublic": false,
-      "required": true
-    },
-    {
-      "name": "BASE_URL",
-      "isPublic": false,
-      "required": true,
-      "development": "http://localhost:3000",
-      "production": "https://newsletter-lvs56aih1-vicsicards-projects.vercel.app"
-    }
-  ],
-  "setupSteps": [
-    {
-      "name": "verifyDependencies",
-      "commands": [
-        "node --version",
-        "npm --version",
-        "git --version",
-        "vercel --version"
-      ]
-    },
-    {
-      "name": "vercelLogin",
-      "commands": [
-        "vercel login"
-      ]
-    },
-    {
-      "name": "gitSetup",
-      "commands": [
-        "git config --global user.name",
-        "git config --global user.email"
-      ]
-    }
-  ],
-  "deploymentSteps": [
-    {
-      "name": "preDeploy",
-      "commands": [
-        "npm run build",
-        "git add .",
-        "git commit -m",
-        "git push origin master"
-      ]
-    },
-    {
-      "name": "deploy",
-      "commands": [
-        "vercel --prod --yes"
-      ]
-    },
-    {
-      "name": "postDeploy",
-      "commands": [
-        "vercel logs"
-      ]
-    }
-  ],
-  "errorHandling": {
-    "typeErrors": {
-      "command": "npm run type-check",
-      "resolution": "Fix type errors in the codebase"
-    },
-    "buildErrors": {
-      "command": "vercel logs",
-      "resolution": "Check build logs for specific errors"
-    },
-    "envErrors": {
-      "command": "vercel env ls",
-      "resolution": "Verify all environment variables are set"
-    },
-    "rollback": {
-      "command": "vercel rollback",
-      "resolution": "Revert to last working deployment"
-    }
-  },
-  "monitoringCommands": {
-    "buildLogs": "vercel logs",
-    "deploymentList": "vercel ls",
-    "envVars": "vercel env ls",
-    "projectInfo": "vercel project ls"
-  }
-}
--->
-
-<!-- AI-DEPLOYMENT-VALIDATION
-{
-  "preDeploymentChecks": [
-    {
-      "command": "npm run build",
-      "expectedOutput": "success"
-    },
-    {
-      "command": "npm run type-check",
-      "expectedOutput": "no errors"
-    },
-    {
-      "command": "verify-env-vars",
-      "expectedOutput": "all present"
-    }
-  ],
-  "requiredDependencies": [
-    {
-      "name": "vercel",
-      "minVersion": "latest"
-    },
-    {
-      "name": "git",
-      "minVersion": "2.0.0"
-    }
-  ],
-  "successCriteria": {
-    "buildSuccess": {
-      "condition": "exit code 0",
-      "verification": "vercel logs"
-    },
-    "deploymentSuccess": {
-      "condition": "deployment URL received",
-      "verification": "vercel ls"
-    },
-    "logsAvailable": {
-      "condition": "vercel logs accessible",
-      "verification": "vercel logs"
-    }
-  },
-  "postDeploymentChecks": [
-    {
-      "name": "environmentVariables",
-      "command": "vercel env ls",
-      "expectedOutput": "all variables present"
-    },
-    {
-      "name": "buildLogs",
-      "command": "vercel logs",
-      "expectedOutput": "no errors"
-    },
-    {
-      "name": "deployment",
-      "command": "vercel ls",
-      "expectedOutput": "deployment listed"
-    }
-  ]
-}
--->
+### Emergency Contacts
+- DevOps Team: devops@company.com
+- Database Admin: dba@company.com
+- Security Team: security@company.com

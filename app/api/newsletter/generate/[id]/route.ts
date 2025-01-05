@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateNewsletter } from '@/utils/newsletter';
 import { sendNewsletterDraft } from '@/utils/newsletter-draft';
-import { DatabaseError, APIError } from '@/utils/errors';
 import { getSupabaseAdmin } from '@/utils/supabase-admin';
-import { initializeGenerationQueue } from '@/utils/newsletter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,56 +12,60 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    console.log('Generating newsletter for ID:', params.id);
-    
-    // Get newsletter details including recipient email
+    // Get newsletter details
     const supabase = getSupabaseAdmin();
     const { data: newsletter, error: newsletterError } = await supabase
       .from('newsletters')
-      .select('*')
+      .select(`
+        *,
+        company:companies (
+          company_name,
+          industry,
+          target_audience,
+          audience_description
+        )
+      `)
       .eq('id', params.id)
       .single();
 
     if (newsletterError || !newsletter) {
-      console.error('Newsletter not found:', newsletterError);
+      console.error('Failed to fetch newsletter:', newsletterError);
       return NextResponse.json(
         { success: false },
         { status: 404 }
       );
     }
 
-    if (!newsletter.draft_recipient_email) {
-      console.error('No draft recipient email set');
-      return NextResponse.json(
-        { success: false },
-        { status: 400 }
-      );
-    }
-    
-    // Initialize the generation queue
-    await initializeGenerationQueue(params.id, supabase);
-    
-    // Start generation process
-    const sections = await generateNewsletter(params.id);
-    
-    console.log('Generated sections:', sections);
+    // Generate newsletter sections
+    const sections = await generateNewsletter(
+      params.id,
+      undefined,
+      {
+        companyName: newsletter.company.company_name,
+        industry: newsletter.company.industry,
+        targetAudience: newsletter.company.target_audience || undefined,
+        audienceDescription: newsletter.company.audience_description || undefined
+      }
+    );
 
-    // Send draft to the newsletter's draft_recipient_email
-    console.log('Sending draft email to:', newsletter.draft_recipient_email);
-    try {
-      await sendNewsletterDraft(newsletter.id, newsletter.draft_recipient_email);
-      
-      return NextResponse.json({
-        success: true,
-        message: 'Newsletter generation started'
-      });
-    } catch (error) {
-      console.error('Error sending draft:', error);
-      return NextResponse.json(
-        { success: false },
-        { status: 500 }
+    // Send draft to recipient
+    if (newsletter.draft_recipient_email) {
+      const result = await sendNewsletterDraft(
+        params.id,
+        newsletter.draft_recipient_email,
+        sections
       );
+
+      if (!result.success) {
+        console.error('Failed to send draft:', result.error);
+        return NextResponse.json(
+          { success: false },
+          { status: 500 }
+        );
+      }
     }
+
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error generating newsletter:', error);
     return NextResponse.json(

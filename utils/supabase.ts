@@ -82,7 +82,7 @@ export async function getActiveContacts(companyId: string): Promise<Contact[]> {
  */
 export async function updateNewsletterStatus(
   id: string,
-  status: 'draft' | 'sent' | 'failed',
+  status: 'draft' | 'published' | 'archived',
   sentAt?: string | null
 ): Promise<void> {
   const updateData: Partial<Newsletter> = {

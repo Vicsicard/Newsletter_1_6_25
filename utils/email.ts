@@ -6,14 +6,14 @@ import {
   Contact, 
   EmailContact,
   NewsletterStatus,
-  DraftStatus,
+  NewsletterDraftStatus,
   NewsletterContactStatus 
 } from '@/types/email';
 
 // Brevo API types
 interface BrevoEmailAddress {
   email: string;
-  name?: string | null;
+  name?: string;
 }
 
 interface BrevoEmailRequest {
@@ -52,43 +52,22 @@ async function sendBrevoEmail(request: BrevoEmailRequest): Promise<BrevoEmailRes
     headers: {
       'api-key': process.env.BREVO_API_KEY,
       'content-type': 'application/json',
-      'accept': 'application/json',
+      'accept': 'application/json'
     },
-    body: JSON.stringify(request),
+    body: JSON.stringify(request)
   });
 
   if (!response.ok) {
     const error = await response.json() as BrevoErrorResponse;
-    switch (response.status) {
-      case 400:
-        throw new APIError('Bad request: ' + error.message, 400);
-      case 401:
-        throw new APIError('Unauthorized: Invalid API key', 401);
-      case 402:
-        throw new APIError('Payment required: Credit limit reached', 402);
-      case 403:
-        throw new APIError('Forbidden: Not enough credits or unauthorized sender', 403);
-      case 404:
-        throw new APIError('Not found: Resource not found', 404);
-      case 405:
-        throw new APIError('Method not allowed', 405);
-      case 406:
-        throw new APIError('Not acceptable: Invalid content type', 406);
-      case 429:
-        throw new APIError('Too many requests: Rate limit exceeded', 429);
-      default:
-        throw new APIError(`Email sending failed: ${error.message}`, response.status);
-    }
+    throw new APIError(`Brevo API error: ${error.message}`, response.status);
   }
 
-  const data = await response.json();
-  return data as BrevoEmailResponse;
+  return response.json();
 }
 
 // Validate email format
 export function validateEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 // Send a single email using Brevo API
@@ -97,27 +76,36 @@ export async function sendEmail(
   subject: string,
   htmlContent: string
 ): Promise<EmailResult> {
-  // Validate required environment variables
-  if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER_EMAIL || !process.env.BREVO_SENDER_NAME) {
-    throw new Error('Missing required Brevo environment variables');
+  if (!validateEmail(to.email)) {
+    throw new APIError(`Invalid email format: ${to.email}`, 400);
   }
 
   const request: BrevoEmailRequest = {
     sender: {
-      email: process.env.BREVO_SENDER_EMAIL,
+      email: process.env.BREVO_SENDER_EMAIL!,
       name: process.env.BREVO_SENDER_NAME
     },
     to: [{
       email: to.email,
-      name: to.name || undefined
+      name: to.name
     }],
     subject,
     htmlContent
   };
 
-  const response = await sendBrevoEmail(request);
-  return {
-    messageId: response.messageId,
-    sent_at: new Date().toISOString()
-  };
+  try {
+    const response = await sendBrevoEmail(request);
+    return {
+      messageId: response.messageId,
+      sent_at: new Date().toISOString()
+    };
+  } catch (error) {
+    if (error instanceof APIError) {
+      throw error;
+    }
+    throw new APIError(
+      error instanceof Error ? error.message : 'Failed to send email',
+      500
+    );
+  }
 }

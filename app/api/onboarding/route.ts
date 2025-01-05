@@ -1,155 +1,156 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/utils/supabase-admin';
-import type { OnboardingResponse } from '@/types/api';
-import { APIError, ValidationError, DatabaseError } from '@/utils/errors';
-import { NextRequest } from 'next/server';
-import type { 
-  Company,
-  Contact,
-  Newsletter,
-  NewsletterContact,
-  NewsletterStatus,
-  ContactStatus,
-  NewsletterContactStatus,
-  DraftStatus,
-  NewsletterSectionStatus
+import { validateEmail } from '@/utils/email';
+import { 
+  NewsletterStatus, 
+  NewsletterDraftStatus, 
+  NewsletterSectionStatus,
+  NewsletterContact
 } from '@/types/email';
 
-// Configure API route
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // Set max duration to 5 minutes
-
-export async function POST(req: NextRequest) {
-  console.log('Starting onboarding process...');
-  const supabaseAdmin = getSupabaseAdmin();
-  
+export async function POST(request: NextRequest) {
   try {
-    let companyData: Partial<Company>;
-    let contactsData: any;
-    let jsonData: any;
-
-    // Clone the request before attempting to read it
-    const clonedReq = req.clone();
-
-    // Try to parse as JSON first, fallback to FormData
-    try {
-      jsonData = await req.json();
-    } catch (error) {
-      console.warn('Failed to parse JSON, attempting FormData...');
-      try {
-        const formData = await clonedReq.formData();
-        jsonData = Object.fromEntries(formData.entries());
-      } catch (error) {
-        console.error('Failed to parse request data');
-        return NextResponse.json({ success: false }, { status: 400 });
-      }
-    }
+    const body = await request.json();
+    const { 
+      companyName,
+      industry,
+      targetAudience,
+      audienceDescription,
+      contactEmail,
+      contactName
+    } = body;
 
     // Validate required fields
-    if (!jsonData.company_name || !jsonData.industry || !jsonData.contact_email) {
-      console.error('Missing required fields');
-      return NextResponse.json({ success: false }, { status: 400 });
+    if (!companyName || !industry || !contactEmail) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
     }
 
     // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(jsonData.contact_email)) {
-      console.error('Invalid email format');
-      return NextResponse.json({ success: false }, { status: 400 });
+    if (!validateEmail(contactEmail)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid email format' },
+        { status: 400 }
+      );
     }
 
-    try {
-      // Create company
-      const { data: company, error: companyError } = await supabaseAdmin
-        .from('companies')
-        .insert([{
-          company_name: jsonData.company_name,
-          industry: jsonData.industry,
-          contact_email: jsonData.contact_email,
-          target_audience: jsonData.target_audience || null,
-          audience_description: jsonData.audience_description || null,
-          website_url: jsonData.website_url || null,
-          phone_number: jsonData.phone_number || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }])
-        .select()
-        .single();
+    const supabase = getSupabaseAdmin();
 
-      if (companyError) {
-        console.error('Error creating company:', companyError);
-        return NextResponse.json({ success: false }, { status: 500 });
-      }
+    // Create company
+    const { data: company, error: companyError } = await supabase
+      .from('companies')
+      .insert({
+        company_name: companyName,
+        industry,
+        target_audience: targetAudience,
+        audience_description: audienceDescription,
+        contact_email: contactEmail,
+        contact_name: contactName || undefined
+      })
+      .select()
+      .single();
 
-      // Create newsletter
-      const newsletterData = {
+    if (companyError) {
+      console.error('Failed to create company:', companyError);
+      return NextResponse.json(
+        { success: false },
+        { status: 500 }
+      );
+    }
+
+    // Create initial newsletter
+    const { data: newsletter, error: newsletterError } = await supabase
+      .from('newsletters')
+      .insert({
         company_id: company.id,
+        subject: `${companyName} Newsletter`,
         status: 'draft' as NewsletterStatus,
-        subject: `${company.company_name} Newsletter`,
-        draft_recipient_email: company.contact_email || jsonData.contact_email,  
-        draft_status: 'pending' as DraftStatus,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+        draft_status: 'draft' as NewsletterDraftStatus,
+        draft_recipient_email: contactEmail
+      })
+      .select()
+      .single();
 
-      const { data: newsletter, error: newsletterError } = await supabaseAdmin
-        .from('newsletters')
-        .insert(newsletterData)
-        .select()
-        .single();
+    if (newsletterError) {
+      console.error('Failed to create newsletter:', newsletterError);
+      return NextResponse.json(
+        { success: false },
+        { status: 500 }
+      );
+    }
 
-      if (newsletterError) {
-        console.error('Error creating newsletter:', newsletterError);
-        // If newsletter creation fails, delete the company
-        const { error: deleteError } = await supabaseAdmin
-          .from('companies')
-          .delete()
-          .eq('id', company.id);
-        
-        if (deleteError) {
-          console.error('Failed to cleanup company after newsletter error:', deleteError);
-        }
-        return NextResponse.json({ success: false }, { status: 500 });
+    // Create initial sections
+    const sections = [
+      {
+        newsletter_id: newsletter.id,
+        section_number: 1,
+        section_type: 'welcome',
+        title: 'Welcome',
+        content: '',
+        status: 'pending' as NewsletterSectionStatus
+      },
+      {
+        newsletter_id: newsletter.id,
+        section_number: 2,
+        section_type: 'industry_trends',
+        title: 'Industry Trends',
+        content: '',
+        status: 'pending' as NewsletterSectionStatus
+      },
+      {
+        newsletter_id: newsletter.id,
+        section_number: 3,
+        section_type: 'practical_tips',
+        title: 'Practical Tips',
+        content: '',
+        status: 'pending' as NewsletterSectionStatus
       }
+    ];
 
-      // The database trigger will automatically create queue items and sections
-      // No need to create them manually here
+    const { error: sectionsError } = await supabase
+      .from('newsletter_sections')
+      .insert(sections);
 
-      // Start the queue processor if not already running
-      try {
-        const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
-        const response = await fetch(`${baseUrl}/api/queue/start`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`
-          },
-          body: JSON.stringify({ newsletterId: newsletter.id })
-        });
-        
-        if (!response.ok) {
-          console.warn('Failed to start queue processor:', await response.text());
-        }
-      } catch (error) {
-        console.warn('Error starting queue processor:', error);
-        // Don't throw here, as the trigger will handle it
-      }
+    if (sectionsError) {
+      console.error('Failed to create sections:', sectionsError);
+      return NextResponse.json(
+        { success: false },
+        { status: 500 }
+      );
+    }
 
-      // Return success response
-      return NextResponse.json({
-        success: true,
-        company,
-        newsletter,
-        message: 'Onboarding completed successfully'
+    // Create initial contact
+    const { error: contactError } = await supabase
+      .from('contacts')
+      .insert({
+        company_id: company.id,
+        email: contactEmail,
+        name: contactName || undefined,
+        status: 'active'
       });
 
-    } catch (error) {
-      console.error('Onboarding error:', error);
-      return NextResponse.json({ success: false }, { status: 500 });
+    if (contactError) {
+      console.error('Failed to create contact:', contactError);
+      return NextResponse.json(
+        { success: false },
+        { status: 500 }
+      );
     }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        company_id: company.id,
+        newsletter_id: newsletter.id
+      }
+    });
   } catch (error) {
-    console.error('Onboarding error:', error);
-    return NextResponse.json({ success: false }, { status: 500 });
+    console.error('Error during onboarding:', error);
+    return NextResponse.json(
+      { success: false },
+      { status: 500 }
+    );
   }
 }

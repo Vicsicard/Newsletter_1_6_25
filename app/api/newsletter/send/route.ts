@@ -1,154 +1,161 @@
-import { NextResponse } from 'next/server';
-import { sendEmail } from '@/utils/email';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/utils/supabase-admin';
-import type { 
-  EmailContact, 
-  NewsletterStatus, 
-  NewsletterContactStatus,
-  Newsletter,
-  NewsletterSection,
-  NewsletterContact,
-  Contact,
-  NewsletterWithAll
-} from '@/types/email';
-import { APIError } from '@/utils/errors';
+import { sendEmail } from '@/utils/email';
+import { NewsletterSectionContent, NewsletterContactStatus, NewsletterStatus } from '@/types/email';
 
-if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER_EMAIL || !process.env.BREVO_SENDER_NAME) {
-  throw new Error('Missing required Brevo environment variables');
-}
-
-// Configure API route
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-export async function POST(req: Request) {
-  const supabaseAdmin = getSupabaseAdmin();
-  let newsletterId: string | undefined;
-
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const body = await req.json();
-    newsletterId = body.newsletterId;
+    const supabase = getSupabaseAdmin();
 
-    if (!newsletterId) {
-      throw new APIError('Missing newsletter ID', 400);
-    }
-
-    // Get newsletter with sections and company info
-    const { data: newsletter, error: newsletterError } = await supabaseAdmin
+    // Get newsletter and contacts
+    const { data: newsletter, error: newsletterError } = await supabase
       .from('newsletters')
       .select(`
         *,
-        company:companies!inner (*),
         newsletter_sections (
-          *
+          title,
+          content,
+          image_url,
+          section_number
+        ),
+        newsletter_contacts (
+          contact:contacts (
+            email,
+            name
+          ),
+          status
         )
       `)
-      .eq('id', newsletterId)
-      .eq('status', 'ready_to_send')
-      .order('section_number', { foreignTable: 'newsletter_sections' })
+      .eq('id', params.id)
       .single();
 
     if (newsletterError || !newsletter) {
-      throw new APIError('Failed to fetch newsletter or newsletter not ready to send', 500);
-    }
-
-    const typedNewsletter: NewsletterWithAll = newsletter;
-
-    // Update to sending status
-    const { error: sendingError } = await supabaseAdmin
-      .from('newsletters')
-      .update({ 
-        status: 'sending' as NewsletterStatus,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', newsletterId);
-
-    if (sendingError) {
-      throw new APIError('Failed to update newsletter to sending status', 500);
-    }
-
-    // Use the company's contact email
-    if (!typedNewsletter.company?.contact_email) {
-      throw new APIError('No contact email found for company', 404);
-    }
-
-    const emailContact: EmailContact = {
-      email: typedNewsletter.company.contact_email,
-      name: typedNewsletter.company.company_name || null
-    };
-
-    // Generate HTML content
-    const htmlContent = typedNewsletter.newsletter_sections
-      .filter(section => section.status === 'active')
-      .sort((a, b) => a.section_number - b.section_number)
-      .map(section => `
-        <h2>${section.title}</h2>
-        ${section.content}
-        ${section.image_url ? `<img src="${section.image_url}" alt="${section.title}">` : ''}
-      `).join('\n');
-
-    // Send email
-    try {
-      const result = await sendEmail(
-        emailContact,
-        typedNewsletter.subject,
-        htmlContent
+      console.error('Failed to fetch newsletter:', newsletterError);
+      return NextResponse.json(
+        { success: false },
+        { status: 404 }
       );
+    }
 
-      // Update newsletter status
-      const { error: updateError } = await supabaseAdmin
-        .from('newsletters')
-        .update({ 
-          status: 'sent' as NewsletterStatus,
-          sent_count: 1,
-          failed_count: 0,
-          last_sent_status: 'Successfully sent to contact',
-          sent_at: result.sent_at,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', newsletterId);
+    // Format sections
+    const sections = newsletter.newsletter_sections
+      .sort((a: any, b: any) => a.section_number - b.section_number)
+      .map((section: any) => ({
+        title: section.title,
+        content: section.content,
+        image_url: section.image_url || undefined
+      }));
 
-      if (updateError) {
-        throw new APIError('Failed to update newsletter status after sending', 500);
-      }
+    // Format HTML content
+    const htmlContent = formatNewsletterHtml(sections);
 
-      return NextResponse.json({
-        success: true,
-        message: 'Newsletter sent successfully',
-        data: {
-          messageId: result.messageId,
-          sent_at: result.sent_at
+    // Send to each contact
+    const sendPromises = newsletter.newsletter_contacts
+      .filter((nc: any) => nc.status === 'pending')
+      .map(async (nc: any) => {
+        try {
+          const result = await sendEmail(
+            {
+              email: nc.contact.email,
+              name: nc.contact.name || undefined
+            },
+            newsletter.subject,
+            htmlContent
+          );
+
+          // Update contact status
+          await supabase
+            .from('newsletter_contacts')
+            .update({ status: 'sent' as NewsletterContactStatus })
+            .eq('newsletter_id', params.id)
+            .eq('contact_id', nc.contact.id);
+
+          return { success: true, email: nc.contact.email };
+        } catch (error) {
+          console.error(`Failed to send to ${nc.contact.email}:`, error);
+          
+          // Update contact status
+          await supabase
+            .from('newsletter_contacts')
+            .update({ status: 'failed' as NewsletterContactStatus })
+            .eq('newsletter_id', params.id)
+            .eq('contact_id', nc.contact.id);
+
+          return { success: false, email: nc.contact.email, error };
         }
       });
-    } catch (error) {
-      // Update newsletter status to failed
-      const { error: updateError } = await supabaseAdmin
-        .from('newsletters')
-        .update({ 
-          status: 'failed' as NewsletterStatus,
-          sent_count: 0,
-          failed_count: 1,
-          last_sent_status: error instanceof Error ? error.message : 'Failed to send newsletter',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', newsletterId);
 
-      if (updateError) {
-        console.error('Failed to update newsletter status after error:', updateError);
-      }
+    const results = await Promise.all(sendPromises);
+    const successful = results.filter(r => r.success);
+    const failed = results.filter(r => !r.success);
 
-      throw error;
-    }
+    // Update newsletter status
+    await supabase
+      .from('newsletters')
+      .update({
+        status: failed.length === 0 ? 'published' : 'draft' as NewsletterStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', params.id);
+
+    return NextResponse.json({
+      success: true,
+      sent: successful.length,
+      failed: failed.length
+    });
   } catch (error) {
     console.error('Error sending newsletter:', error);
-
-    if (error instanceof APIError) {
-      throw error;
-    }
-
-    throw new APIError(
-      error instanceof Error ? error.message : 'Failed to send newsletter',
-      500
+    return NextResponse.json(
+      { success: false },
+      { status: 500 }
     );
   }
+}
+
+function formatNewsletterHtml(sections: NewsletterSectionContent[]): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+          }
+          h1, h2 {
+            color: #2c5282;
+          }
+          img {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+          }
+          .section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+          }
+        </style>
+      </head>
+      <body>
+        ${sections.map(section => `
+          <div class="section">
+            <h2>${section.title}</h2>
+            ${section.content}
+            ${section.image_url ? `<img src="${section.image_url}" alt="${section.title}">` : ''}
+          </div>
+        `).join('')}
+      </body>
+    </html>
+  `;
 }

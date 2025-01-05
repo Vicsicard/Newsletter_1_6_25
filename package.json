@@ -12,7 +12,8 @@
     "test:debug": "playwright test --debug",
     "monitor": "ts-node -r tsconfig-paths/register -P ./scripts/tsconfig.json scripts/verify-onboarding.ts",
     "queue": "ts-node -r tsconfig-paths/register -P ./scripts/tsconfig.json scripts/monitor-queue.ts",
-    "process": "ts-node -r tsconfig-paths/register -P ./scripts/tsconfig.json scripts/process-queue.ts"
+    "process": "ts-node -r tsconfig-paths/register -P ./scripts/tsconfig.json scripts/process-queue.ts",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.19",

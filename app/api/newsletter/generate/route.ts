@@ -1,169 +1,91 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { generateNewsletter } from '@/utils/newsletter';
-import { createClient } from '@supabase/supabase-js';
-import { APIError } from '@/utils/errors';
+import { sendNewsletterDraft } from '@/utils/newsletter-draft';
+import { DatabaseError, APIError } from '@/utils/errors';
+import { getSupabaseAdmin } from '@/utils/supabase-admin';
+import { initializeGenerationQueue } from '@/utils/newsletter';
+import { NewsletterSectionContent } from '@/types/email';
 
-// Configure API route
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes
 
-interface GenerateRequest {
-  newsletterId: string;
-  prompt?: string;
-  sections?: {
-    title: string;
-    content: string;
-    image_prompt?: string;
-    type?: string;
-  }[];
-}
-
-export async function POST(req: Request) {
-  // Initialize Supabase client with environment variables
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const body = await req.json() as GenerateRequest;
-    const { newsletterId, prompt, sections } = body;
-
-    if (!newsletterId) {
-      throw new APIError('Missing newsletter ID', 400);
-    }
-
-    // First, fetch the newsletter
+    console.log('Generating newsletter for ID:', params.id);
+    
+    // Get newsletter details including recipient email
+    const supabase = getSupabaseAdmin();
     const { data: newsletter, error: newsletterError } = await supabase
       .from('newsletters')
-      .select('id, company_id, status, draft_status')
-      .eq('id', newsletterId)
+      .select(`
+        *,
+        company:companies (
+          company_name,
+          industry,
+          target_audience,
+          audience_description
+        )
+      `)
+      .eq('id', params.id)
       .single();
 
     if (newsletterError || !newsletter) {
-      console.error('Newsletter fetch error:', newsletterError);
-      throw new APIError('Failed to fetch newsletter', 500);
+      console.error('Newsletter not found:', newsletterError);
+      return NextResponse.json(
+        { success: false },
+        { status: 404 }
+      );
     }
 
-    // Update newsletter status to generating
-    const { error: statusError } = await supabase
-      .from('newsletters')
-      .update({ 
-        status: 'draft',
-        draft_status: 'draft' 
-      })
-      .eq('id', newsletterId);
-
-    if (statusError) {
-      console.error('Error updating newsletter status:', statusError);
-      throw new APIError('Failed to update newsletter status', 500);
+    if (!newsletter.draft_recipient_email) {
+      console.error('No draft recipient email set');
+      return NextResponse.json(
+        { success: false },
+        { status: 400 }
+      );
     }
-
-    // Then fetch the company details
-    const { data: company, error: companyError } = await supabase
-      .from('companies')
-      .select('company_name, industry, target_audience, audience_description')
-      .eq('id', newsletter.company_id)
-      .single();
-
-    if (companyError || !company) {
-      console.error('Company fetch error:', companyError);
-      throw new APIError('Failed to fetch company details', 500);
-    }
-
-    // Delete existing sections for this newsletter
-    const { error: deleteError } = await supabase
-      .from('newsletter_sections')
-      .delete()
-      .eq('newsletter_id', newsletterId);
-
-    if (deleteError) {
-      console.error('Error deleting existing sections:', deleteError);
-      throw new APIError('Failed to delete existing sections', 500);
-    }
-
-    // If sections are provided, use those
-    if (sections) {
-      const { error: insertError } = await supabase
-        .from('newsletter_sections')
-        .insert(
-          sections.map((section, index) => ({
-            newsletter_id: newsletterId,
-            section_number: index + 1,
-            section_type: section.type || 'welcome',
-            title: section.title,
-            content: section.content,
-            image_prompt: section.image_prompt,
-            status: 'completed'
-          }))
-        );
-
-      if (insertError) {
-        console.error('Section insert error:', insertError);
-        throw new APIError('Failed to insert sections', 500);
-      }
-
-      return NextResponse.json({ sections });
-    }
-
-    // Otherwise generate new sections
-    const generatedSections = await generateNewsletter(
-      newsletterId,
-      prompt,
+    
+    // Initialize the generation queue
+    await initializeGenerationQueue(params.id, supabase);
+    
+    // Start generation process
+    const sections = await generateNewsletter(
+      params.id,
+      undefined,
       {
-        companyName: company.company_name,
-        industry: company.industry,
-        targetAudience: company.target_audience,
-        audienceDescription: company.audience_description
+        companyName: newsletter.company.company_name,
+        industry: newsletter.company.industry,
+        targetAudience: newsletter.company.target_audience || undefined,
+        audienceDescription: newsletter.company.audience_description || undefined
       }
     );
+    
+    console.log('Generated sections:', sections);
 
-    // Insert the generated sections
-    const { error: insertError } = await supabase
-      .from('newsletter_sections')
-      .insert(
-        generatedSections.map((section, index) => ({
-          newsletter_id: newsletterId,
-          section_number: index + 1,
-          section_type: 'welcome',
-          title: section.title,
-          content: section.content,
-          image_prompt: section.image_prompt,
-          image_url: section.imageUrl,
-          status: 'completed'
-        }))
-      );
+    // Send draft to the newsletter's draft_recipient_email
+    const result = await sendNewsletterDraft(
+      params.id,
+      newsletter.draft_recipient_email,
+      sections
+    );
 
-    if (insertError) {
-      console.error('Error inserting generated sections:', insertError);
-      throw new APIError('Failed to save generated sections', 500);
-    }
-
-    // Update newsletter status to draft
-    const { error: statusUpdateError } = await supabase
-      .from('newsletters')
-      .update({ draft_status: 'draft' })
-      .eq('id', newsletterId);
-
-    if (statusUpdateError) {
-      console.error('Error updating newsletter status:', statusUpdateError);
-      throw new APIError('Failed to update newsletter status', 500);
-    }
-
-    return NextResponse.json({ sections: generatedSections });
-  } catch (error: any) {
-    console.error('Error generating newsletter:', error);
-
-    if (error instanceof APIError) {
+    if (!result.success) {
+      console.error('Failed to send draft:', result.error);
       return NextResponse.json(
-        { error: error.message },
-        { status: error.statusCode }
+        { success: false },
+        { status: 500 }
       );
     }
 
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error generating newsletter:', error);
     return NextResponse.json(
-      { error: 'Failed to generate newsletter' },
+      { success: false },
       { status: 500 }
     );
   }
