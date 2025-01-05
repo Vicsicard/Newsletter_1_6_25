@@ -18,12 +18,19 @@ CREATE TABLE IF NOT EXISTS newsletters (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     company_id UUID REFERENCES companies(id),
     subject TEXT NOT NULL,
-    draft_status TEXT NOT NULL CHECK (draft_status IN ('draft', 'draft_sent', 'pending_contacts', 'ready_to_send', 'sending', 'sent', 'failed')),
+    status TEXT DEFAULT 'draft',
+    draft_status TEXT DEFAULT 'draft',
     draft_recipient_email TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    sent_at TIMESTAMPTZ
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add constraints for status fields
+ALTER TABLE newsletters
+    ADD CONSTRAINT newsletters_status_check 
+    CHECK (status IN ('draft', 'published', 'archived')),
+    ADD CONSTRAINT newsletters_draft_status_check 
+    CHECK (draft_status IN ('draft', 'draft_sent', 'pending_contacts', 'ready_to_send', 'sending', 'sent', 'failed', 'generating'));
 
 CREATE INDEX IF NOT EXISTS idx_newsletters_draft_status ON newsletters(draft_status);
 CREATE INDEX IF NOT EXISTS idx_newsletters_draft_recipient ON newsletters(draft_recipient_email);
@@ -33,13 +40,14 @@ CREATE TABLE IF NOT EXISTS newsletter_sections (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     newsletter_id UUID REFERENCES newsletters(id),
     section_number INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    image_prompt TEXT,
-    image_url TEXT,
+    section_type TEXT NOT NULL DEFAULT 'welcome',
+    title TEXT,
+    content TEXT,
+    status TEXT DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(newsletter_id, section_number)
+    CONSTRAINT newsletter_sections_status_check 
+    CHECK (status IN ('pending', 'in_progress', 'completed', 'failed'))
 );
 
 -- Contacts table

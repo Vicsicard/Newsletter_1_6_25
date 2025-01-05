@@ -7,11 +7,11 @@ export type Json =
   | Json[];
 
 // These must match database CHECK constraints exactly
-export type NewsletterStatus = 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
-export type DraftStatus = 'pending' | 'sent' | 'failed';
+export type NewsletterStatus = 'draft' | 'published' | 'archived';
+export type DraftStatus = 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
 export type ContactStatus = 'active' | 'deleted';
 export type NewsletterContactStatus = 'pending' | 'sent' | 'failed';
-export type NewsletterSectionStatus = 'active' | 'deleted';
+export type NewsletterSectionStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 export type ImageGenerationStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type CsvUploadStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type CompiledNewsletterStatus = 'draft' | 'ready' | 'sent' | 'error';
@@ -294,7 +294,7 @@ export interface Database {
           content: string;
           image_prompt: string | null;
           image_url: string | null;
-          status: 'active' | 'deleted';
+          status: 'pending' | 'in_progress' | 'completed' | 'failed';
           created_at: string | null;
           updated_at: string | null;
         };
@@ -306,7 +306,7 @@ export interface Database {
           content: string;
           image_prompt?: string | null;
           image_url?: string | null;
-          status?: 'active' | 'deleted';
+          status?: 'pending' | 'in_progress' | 'completed' | 'failed';
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -318,7 +318,7 @@ export interface Database {
           content?: string;
           image_prompt?: string | null;
           image_url?: string | null;
-          status?: 'active' | 'deleted';
+          status?: 'pending' | 'in_progress' | 'completed' | 'failed';
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -328,10 +328,9 @@ export interface Database {
           id: string;
           company_id: string;
           subject: string;
-          draft_status: 'pending' | 'sent' | 'failed';
+          status: 'draft' | 'published' | 'archived';
+          draft_status: 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
           draft_recipient_email: string | null;
-          draft_sent_at: string | null;
-          status: 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
           sent_at: string | null;
           sent_count: number;
           failed_count: number;
@@ -343,10 +342,9 @@ export interface Database {
           id?: string;
           company_id: string;
           subject: string;
-          draft_status?: 'pending' | 'sent' | 'failed';
+          status?: 'draft' | 'published' | 'archived';
+          draft_status?: 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
           draft_recipient_email?: string | null;
-          draft_sent_at?: string | null;
-          status?: 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
           sent_at?: string | null;
           sent_count?: number;
           failed_count?: number;
@@ -358,10 +356,9 @@ export interface Database {
           id?: string;
           company_id?: string;
           subject?: string;
-          draft_status?: 'pending' | 'sent' | 'failed';
+          status?: 'draft' | 'published' | 'archived';
+          draft_status?: 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
           draft_recipient_email?: string | null;
-          draft_sent_at?: string | null;
-          status?: 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
           sent_at?: string | null;
           sent_count?: number;
           failed_count?: number;

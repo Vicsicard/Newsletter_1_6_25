@@ -15,7 +15,7 @@
   - OpenAI API key
   - Supabase credentials
   - Brevo API credentials
-
+& "C:\Program Files\Git\bin\git.exe" add .
 ### 3. Initial Setup
 
 #### Install Global Dependencies
