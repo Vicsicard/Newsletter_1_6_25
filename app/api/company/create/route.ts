@@ -9,26 +9,50 @@ const supabase = createClient(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    console.log('Received request body:', body);
     
-    const { data: company, error } = await supabase
-      .from('companies')
-      .insert([{
-        company_name: body.company_name,
-        website_url: body.website_url,
-        industry: body.industry,
-        contact_email: body.contact_email,
-        target_audience: body.target_audience,
-        audience_description: body.audience_description
-      }])
-      .select();
+    // Validate required fields
+    if (!body.company_name || !body.industry || !body.contact_email) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
 
-    if (error) throw error;
+    // Try using raw SQL query
+    const { data, error } = await supabase.from('companies').insert({
+      company_name: body.company_name,
+      industry: body.industry,
+      contact_email: body.contact_email,
+      target_audience: body.target_audience || null,
+      audience_description: body.audience_description || null,
+      website_url: body.website_url || null,
+      status: 'active'
+    }).select('*');
 
-    return NextResponse.json(company);
+    if (error) {
+      console.error('Database error:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      return NextResponse.json(
+        { 
+          error: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Error creating company:', error);
+    console.error('Unexpected error:', error);
     return NextResponse.json(
-      { error: 'Failed to create company' },
+      { error: 'Internal server error', details: error },
       { status: 500 }
     );
   }
