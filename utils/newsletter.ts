@@ -15,6 +15,8 @@ interface NewsletterSectionContent {
   title: string;
   content: string;
   image_url?: string;
+  section_type: string;
+  section_number: number;
 }
 
 interface GenerateOptions {
@@ -111,9 +113,10 @@ export async function initializeGenerationQueue(
   }
 }
 
-async function validateOpenAIKey() {
+// Export the function for testing
+export async function validateOpenAIKey() {
   try {
-    // Try a simple API call to validate the key
+    const openai = new OpenAI();
     await openai.models.list();
     return true;
   } catch (error) {
@@ -162,6 +165,10 @@ async function waitForImageRateLimit() {
   imageGenerationTimestamps.push(now);
 }
 
+// Maximum tokens per section to stay within OpenAI limits
+const MAX_TOKENS_PER_SECTION = 2048;
+const TOKEN_BUFFER = 200; // Buffer for system message and other overhead
+
 async function generateSectionsWithOpenAI(
   openai: OpenAI,
   customPrompt?: string,
@@ -173,20 +180,43 @@ async function generateSectionsWithOpenAI(
   }
 ): Promise<NewsletterSectionContent[]> {
   const sections: NewsletterSectionContent[] = [];
+  const supabase = getSupabaseAdmin();
 
-  for (const [sectionType, config] of Object.entries(SECTION_CONFIG)) {
+  // Fetch custom section types from database
+  const { data: sectionTypes, error: sectionError } = await supabase
+    .from('newsletter_section_types')
+    .select('*')
+    .order('section_number');
+
+  if (sectionError) {
+    throw new Error('Failed to fetch section types');
+  }
+
+  for (const sectionType of sectionTypes) {
     try {
-      // Generate section content
-      const prompt = customPrompt || config.prompt;
+      // Create dynamic prompt using company info
+      const basePrompt = sectionType.prompt_template;
+      const dynamicPrompt = basePrompt
+        .replace('{{company_name}}', companyInfo?.companyName || '')
+        .replace('{{industry}}', companyInfo?.industry || '')
+        .replace('{{target_audience}}', companyInfo?.targetAudience || '')
+        .replace('{{audience_description}}', companyInfo?.audienceDescription || '');
+
+      // Calculate available tokens
+      const promptTokens = Math.ceil(dynamicPrompt.length / 4); // Rough estimate
+      const availableTokens = MAX_TOKENS_PER_SECTION - promptTokens - TOKEN_BUFFER;
+
+      // Generate section content with token limit
       const content = await callOpenAIWithRetry([
         {
           role: 'system',
-          content: `You are a professional newsletter writer. Write a ${sectionType} section for a newsletter.
-                   Keep it concise, engaging, and relevant to the target audience.`
+          content: `You are a professional newsletter writer. Write a ${sectionType.section_type} section for a newsletter.
+                   Keep it concise, engaging, and relevant to the target audience.
+                   Your response must not exceed ${availableTokens} tokens.`
         },
         {
           role: 'user',
-          content: prompt
+          content: dynamicPrompt || customPrompt || basePrompt
         }
       ]);
 
@@ -194,23 +224,130 @@ async function generateSectionsWithOpenAI(
       const [title, ...contentLines] = content.split('\n').filter(line => line.trim());
       
       // Generate image if needed
-      let imageUrl: string | undefined = undefined;
-      if (sectionType !== 'welcome') {
-        imageUrl = await generateImage(title);
+      let imageUrl: string | undefined;
+      try {
+        imageUrl = await generateImage(title) || undefined;
+      } catch (error) {
+        console.error('Failed to generate image:', error);
+        // Continue without image
       }
 
       sections.push({
         title,
         content: contentLines.join('\n'),
-        image_url: imageUrl
+        image_url: imageUrl,
+        section_type: sectionType.section_type,
+        section_number: sectionType.section_number
       });
     } catch (error: any) {
-      console.error(`Error generating section ${sectionType}:`, error);
+      console.error(`Error generating section ${sectionType.section_type}:`, error);
       throw error;
     }
   }
 
   return sections;
+}
+
+interface CreateSectionOptions {
+  newsletterId: string;
+  companyId: string;
+  selectedSectionTypes?: string[];
+}
+
+async function createNewsletterSections({
+  newsletterId,
+  companyId,
+  selectedSectionTypes
+}: CreateSectionOptions): Promise<NewsletterSectionRow[]> {
+  const supabase = getSupabaseAdmin();
+  
+  // Fetch available section types for company
+  const { data: sectionTypes, error: typesError } = await supabase
+    .from('newsletter_section_types')
+    .select('*')
+    .or(`company_id.is.null,company_id.eq.${companyId}`)
+    .order('section_number');
+    
+  if (typesError) {
+    throw new Error('Failed to fetch section types');
+  }
+
+  // Filter to selected types if provided, otherwise use all available types
+  const typesToCreate = selectedSectionTypes
+    ? sectionTypes.filter(type => selectedSectionTypes.includes(type.section_type))
+    : sectionTypes;
+
+  // Ensure all required sections are included
+  const requiredTypes = sectionTypes.filter(type => type.required);
+  const missingRequired = requiredTypes.filter(
+    req => !typesToCreate.some(type => type.section_type === req.section_type)
+  );
+
+  if (missingRequired.length > 0) {
+    throw new Error(
+      `Missing required section types: ${missingRequired.map(t => t.section_type).join(', ')}`
+    );
+  }
+
+  // Create sections in correct order
+  const sections: NewsletterSectionInsert[] = typesToCreate.map((type, index) => ({
+    newsletter_id: newsletterId,
+    section_type: type.section_type,
+    section_number: type.section_number || index + 1,
+    status: 'pending',
+    content: null,
+    error_message: null
+  }));
+
+  // Insert sections
+  const { data: createdSections, error: insertError } = await supabase
+    .from('newsletter_sections')
+    .insert(sections)
+    .select();
+
+  if (insertError) {
+    throw new Error('Failed to create newsletter sections');
+  }
+
+  return createdSections;
+}
+
+async function createQueueItems(
+  newsletterId: string,
+  sections: NewsletterSectionRow[]
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+
+  // Create queue items for each section
+  const queueItems = sections.map(section => ({
+    newsletter_id: newsletterId,
+    section_type: section.section_type,
+    section_number: section.section_number,
+    status: 'pending',
+    attempts: 0,
+    error_message: null,
+    processing_started_at: null,
+    processing_completed_at: null
+  }));
+
+  // Insert queue items
+  const { error: queueError } = await supabase
+    .from('newsletter_generation_queue')
+    .insert(queueItems);
+
+  if (queueError) {
+    throw new Error('Failed to create queue items');
+  }
+
+  // Update newsletter status to indicate queue items are created
+  const { error: updateError } = await supabase
+    .from('newsletters')
+    .update({ draft_status: 'queued' })
+    .eq('id', newsletterId);
+
+  if (updateError) {
+    throw new Error('Failed to update newsletter status');
+  }
 }
 
 export async function generateNewsletter(
@@ -251,4 +388,46 @@ export function formatNewsletterSubject(companyName: string, date: Date = new Da
 export function validateEmailList(emails: string[]): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emails.every(email => emailRegex.test(email));
+}
+
+// Generate HTML content for newsletter
+export function generateNewsletterHtml(sections: { title: string; content: string; imageUrl?: string }[]): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+          }
+          h1, h2 {
+            color: #2c5282;
+          }
+          img {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+          }
+          .section {
+            margin-bottom: 40px;
+          }
+        </style>
+      </head>
+      <body>
+        ${sections.map(section => `
+          <div class="section">
+            ${section.title ? `<h2>${section.title}</h2>` : ''}
+            ${section.imageUrl ? `<img src="${section.imageUrl}" alt="${section.title || 'Newsletter section image'}">` : ''}
+            ${section.content}
+          </div>
+        `).join('')}
+      </body>
+    </html>
+  `;
 }

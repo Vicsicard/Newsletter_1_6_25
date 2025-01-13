@@ -1,14 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
-import { Database } from '@/types/database';
-import { getSupabaseAdmin } from '@/utils/supabase-admin';
-import { APIError } from '@/utils/errors';
+import { Database } from '../types/database';
+import { getSupabaseAdmin } from './supabase-admin';
+import { APIError } from './errors';
 import { 
   Contact, 
   EmailContact,
   NewsletterStatus,
   NewsletterDraftStatus,
   NewsletterContactStatus 
-} from '@/types/email';
+} from '../types/email';
 
 // Brevo API types
 interface BrevoEmailAddress {
@@ -62,7 +62,8 @@ async function sendBrevoEmail(request: BrevoEmailRequest): Promise<BrevoEmailRes
     throw new APIError(`Brevo API error: ${error.message}`, response.status);
   }
 
-  return response.json();
+  const data = await response.json() as BrevoEmailResponse;
+  return data;
 }
 
 // Validate email format

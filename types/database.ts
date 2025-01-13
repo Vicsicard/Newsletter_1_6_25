@@ -16,6 +16,7 @@ export type ImageGenerationStatus = 'pending' | 'processing' | 'completed' | 'fa
 export type CsvUploadStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type CompiledNewsletterStatus = 'draft' | 'ready' | 'sent' | 'error';
 export type NewsletterGenerationQueueStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface Database {
   public: {
@@ -253,9 +254,10 @@ export interface Database {
           newsletter_id: string;
           section_type: string;
           section_number: number;
-          status: NewsletterGenerationQueueStatus;
-          attempts: number;
+          content: string | null;
+          status: string;
           error_message: string | null;
+          attempts: number;
           last_attempt_at: string | null;
           created_at: string | null;
           updated_at: string | null;
@@ -265,9 +267,10 @@ export interface Database {
           newsletter_id: string;
           section_type: string;
           section_number: number;
-          status?: NewsletterGenerationQueueStatus;
-          attempts?: number;
+          content?: string | null;
+          status?: string;
           error_message?: string | null;
+          attempts?: number;
           last_attempt_at?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
@@ -277,48 +280,90 @@ export interface Database {
           newsletter_id?: string;
           section_type?: string;
           section_number?: number;
-          status?: NewsletterGenerationQueueStatus;
-          attempts?: number;
+          content?: string | null;
+          status?: string;
           error_message?: string | null;
+          attempts?: number;
           last_attempt_at?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
+        };
+      };
+      newsletter_section_types: {
+        Row: {
+          id: string;
+          section_type: string;
+          display_name: string;
+          prompt_template: string;
+          section_number: number;
+          is_required: boolean;
+          is_active: boolean;
+          company_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          section_type: string;
+          display_name: string;
+          prompt_template: string;
+          section_number: number;
+          is_required?: boolean;
+          is_active?: boolean;
+          company_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          section_type?: string;
+          display_name?: string;
+          prompt_template?: string;
+          section_number?: number;
+          is_required?: boolean;
+          is_active?: boolean;
+          company_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
       };
       newsletter_sections: {
         Row: {
           id: string;
           newsletter_id: string;
+          section_type: string;
           section_number: number;
-          title: string;
-          content: string;
-          image_prompt: string | null;
+          title: string | null;
+          content: string | null;
           image_url: string | null;
-          status: 'pending' | 'in_progress' | 'completed' | 'failed';
+          status: string;
+          error_message: string | null;
           created_at: string | null;
           updated_at: string | null;
         };
         Insert: {
           id?: string;
           newsletter_id: string;
+          section_type: string;
           section_number: number;
-          title: string;
-          content: string;
-          image_prompt?: string | null;
+          title?: string | null;
+          content?: string | null;
           image_url?: string | null;
-          status?: 'pending' | 'in_progress' | 'completed' | 'failed';
+          status?: string;
+          error_message?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
         Update: {
           id?: string;
           newsletter_id?: string;
+          section_type?: string;
           section_number?: number;
-          title?: string;
-          content?: string;
-          image_prompt?: string | null;
+          title?: string | null;
+          content?: string | null;
           image_url?: string | null;
-          status?: 'pending' | 'in_progress' | 'completed' | 'failed';
+          status?: string;
+          error_message?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -328,13 +373,15 @@ export interface Database {
           id: string;
           company_id: string;
           subject: string;
-          status: 'draft' | 'published' | 'archived';
-          draft_status: 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
+          status: string;
+          draft_status: string;
           draft_recipient_email: string | null;
+          draft_sent_at: string | null;
           sent_at: string | null;
           sent_count: number;
           failed_count: number;
           last_sent_status: string | null;
+          error_message: string | null;
           created_at: string | null;
           updated_at: string | null;
         };
@@ -342,13 +389,15 @@ export interface Database {
           id?: string;
           company_id: string;
           subject: string;
-          status?: 'draft' | 'published' | 'archived';
-          draft_status?: 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
+          status?: string;
+          draft_status?: string;
           draft_recipient_email?: string | null;
+          draft_sent_at?: string | null;
           sent_at?: string | null;
           sent_count?: number;
           failed_count?: number;
           last_sent_status?: string | null;
+          error_message?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -356,15 +405,46 @@ export interface Database {
           id?: string;
           company_id?: string;
           subject?: string;
-          status?: 'draft' | 'published' | 'archived';
-          draft_status?: 'draft' | 'draft_sent' | 'pending_contacts' | 'ready_to_send' | 'sending' | 'sent' | 'failed';
+          status?: string;
+          draft_status?: string;
           draft_recipient_email?: string | null;
+          draft_sent_at?: string | null;
           sent_at?: string | null;
           sent_count?: number;
           failed_count?: number;
           last_sent_status?: string | null;
+          error_message?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
+        };
+      };
+      workflow_logs: {
+        Row: {
+          id: string;
+          level: LogLevel;
+          message: string;
+          context: Json | null;
+          component: string;
+          timestamp: string;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          level: LogLevel;
+          message: string;
+          context?: Json | null;
+          component: string;
+          timestamp: string;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          level?: LogLevel;
+          message?: string;
+          context?: Json | null;
+          component?: string;
+          timestamp?: string;
+          created_at?: string | null;
         };
       };
     };

@@ -3,7 +3,9 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "es2019",
-    "types": ["node", "@playwright/test"]
+    "types": ["node", "@playwright/test", "jest", "@jest/globals"],
+    "moduleResolution": "node",
+    "esModuleInterop": true
   },
   "include": ["./**/*", "../playwright.config.ts"],
   "exclude": ["node_modules"]

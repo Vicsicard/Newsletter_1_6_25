@@ -147,3 +147,64 @@ export function generateUnsubscribeUrl(subscriberId: string, companyId: string):
   const baseUrl = process.env.BASE_URL || 'http://localhost:3000'
   return `${baseUrl}/unsubscribe?sid=${subscriberId}&cid=${companyId}`
 }
+
+import { NewsletterSection } from '@/src/types';
+
+export function formatNewsletterContent(sections: NewsletterSection[]): string {
+  let htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Newsletter</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 20px;
+        }
+        .section {
+          margin-bottom: 30px;
+          padding: 20px;
+          background: #f9f9f9;
+          border-radius: 5px;
+        }
+        .section-title {
+          font-size: 24px;
+          color: #2c3e50;
+          margin-bottom: 15px;
+        }
+        .section-content {
+          font-size: 16px;
+        }
+        .section-image {
+          max-width: 100%;
+          height: auto;
+          margin: 15px 0;
+        }
+      </style>
+    </head>
+    <body>
+  `;
+
+  sections.forEach((section) => {
+    htmlContent += `
+      <div class="section">
+        ${section.title ? `<h2 class="section-title">${section.title}</h2>` : ''}
+        ${section.content ? `<div class="section-content">${section.content}</div>` : ''}
+        ${section.image_url ? `<img class="section-image" src="${section.image_url}" alt="${section.title || 'Newsletter section image'}" />` : ''}
+      </div>
+    `;
+  });
+
+  htmlContent += `
+    </body>
+    </html>
+  `;
+
+  return htmlContent;
+}

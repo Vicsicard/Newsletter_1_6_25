@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/utils/supabase-admin';
 import { sendEmail } from '@/utils/email';
-import { formatNewsletterHtml } from '@/utils/newsletter';
+import { generateNewsletter } from '@/utils/newsletter';
+import { formatNewsletterContent } from '@/utils/email-template';
 
 export async function POST(
   request: Request,
@@ -45,11 +46,11 @@ export async function POST(
         imageUrl: section.image_url
       }));
 
-    const htmlContent = formatNewsletterHtml(sections);
+    const htmlContent = formatNewsletterContent(sections);
 
     // Send email
     const messageId = await sendEmail(
-      { email: recipientEmail, name: null },
+      { email: recipientEmail, name: recipientEmail },
       newsletter.subject || 'Your Newsletter',
       htmlContent
     );

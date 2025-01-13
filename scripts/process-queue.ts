@@ -2,161 +2,88 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { join } from 'path';
 import OpenAI from 'openai';
-import { generateEmailHTML } from '@/utils/email-template';
-import { sendEmail } from '@/utils/email';
-import { TransactionalEmailsApi, TransactionalEmailsApiApiKeys, SendSmtpEmail } from '@sendinblue/client';
+import { validateEmail, sendEmail } from '../utils/email';
+import { generateEmailHTML } from '../utils/email-template';
 
 // Load environment variables from .env.local
 dotenv.config({ path: join(process.cwd(), '.env.local') });
 
 // Initialize OpenAI client
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!
+  apiKey: process.env.OPENAI_API_KEY
 });
 
 // Initialize Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Section types and their prompts
-const SECTION_CONFIG = {
-  welcome: {
-    prompt: "Write a welcome message",
-    sectionNumber: 1
-  },
-  industry_trends: {
-    prompt: "Write about current industry trends and innovations",
-    sectionNumber: 2
-  },
-  practical_tips: {
-    prompt: "Provide practical tips and best practices",
-    sectionNumber: 3
-  }
-} as const;
+// Types based on database schema
+type NewsletterStatus = 'draft' | 'published';
+type NewsletterDraftStatus = 'draft' | 'ready_to_send' | 'sent';
+type NewsletterSectionStatus = 'pending' | 'completed';
+type QueueStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
-type SectionType = keyof typeof SECTION_CONFIG;
-
-interface QueueItem {
-  id: string;
-  newsletter_id: string;
-  section_type: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  error_message?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface Newsletter {
-  id: string;
-  company_id: string;
-  subject: string;
-  draft_recipient_email: string;
-  draft_status: 'draft' | 'generating' | 'ready' | 'sent' | 'error';
-  created_at: string;
-  updated_at: string;
-}
-
-interface Company {
+interface DatabaseCompany {
   id: string;
   company_name: string;
   industry: string;
-  target_audience?: string;
-  audience_description?: string;
-  created_at: string;
-  updated_at: string;
+  target_audience?: string | null;
+  audience_description?: string | null;
+  contact_email: string;
+  contact_name?: string | null;
 }
 
-interface NewsletterSection {
+interface DatabaseNewsletter {
+  id: string;
+  subject: string;
+  status: NewsletterStatus;
+  draft_status: NewsletterDraftStatus;
+  draft_recipient_email?: string | null;
+  company: DatabaseCompany;
+}
+
+interface DatabaseQueueItem {
   id: string;
   newsletter_id: string;
   section_type: string;
   section_number: number;
-  content: string;
+  status: QueueStatus;
+  attempts: number;
+  last_attempt_at?: string | null;
+  error_message?: string | null;
   created_at: string;
   updated_at: string;
+  newsletter?: DatabaseNewsletter;
 }
 
-interface Contact {
-  id: string;
-  email: string;
-  name: string | null;
-  company_id: string;
-  status: 'active' | 'deleted';
-  created_at: string | null;
-  updated_at: string | null;
+interface QueueItemUpdate {
+  status?: QueueStatus;
+  attempts?: number;
+  last_attempt_at?: string | null;
+  error_message?: string | null;
 }
 
-// Validate required environment variables
-const requiredEnvVars = [
-  'OPENAI_API_KEY',
-  'SUPABASE_URL',
-  'SUPABASE_SERVICE_ROLE_KEY',
-  'BREVO_API_KEY',
-  'BREVO_SENDER_EMAIL',
-  'BREVO_SENDER_NAME'
-];
-
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    throw new Error(`Missing required environment variable: ${envVar}`);
-  }
+interface NewsletterSectionUpdate {
+  title?: string;
+  content?: string;
+  status?: NewsletterSectionStatus;
 }
 
-console.log('Starting queue processor with configuration:', {
-  openaiKey: process.env.OPENAI_API_KEY ? 'set' : 'missing',
-  supabaseUrl: process.env.SUPABASE_URL ? 'set' : 'missing',
-  supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set' : 'missing',
-  brevoKey: process.env.BREVO_API_KEY ? 'set' : 'missing',
-  brevoEmail: process.env.BREVO_SENDER_EMAIL ? 'set' : 'missing',
-  brevoName: process.env.BREVO_SENDER_NAME ? 'set' : 'missing'
-});
-
-// Constants for rate limiting and delays
-const RATE_LIMIT_DELAY = 5000; // 5 seconds between API calls
-const PROCESS_INTERVAL = 30000; // 30 seconds between checking for new items
-const MAX_CONCURRENT_REQUESTS = 3;
-let activeRequests = 0;
-
-async function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function getNextPendingItem(): Promise<QueueItem | null> {
+async function getNextPendingItem(): Promise<DatabaseQueueItem | null> {
   console.log('Checking for pending items...');
   
-  const { data: items, error } = await supabase
+  // First get the next pending queue item
+  const { data: items, error: queueError } = await supabase
     .from('newsletter_generation_queue')
-    .select(`
-      *,
-      newsletters:newsletter_id (
-        id,
-        subject,
-        draft_recipient_email,
-        draft_status,
-        company_id,
-        companies:company_id (
-          id,
-          company_name,
-          industry,
-          target_audience,
-          audience_description
-        )
-      )
-    `)
+    .select('*')
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
     .limit(1);
 
-  if (error) {
-    console.error('Error fetching next item:', error);
+  if (queueError) {
+    console.error('Error fetching next item:', queueError);
     return null;
   }
 
@@ -165,29 +92,47 @@ async function getNextPendingItem(): Promise<QueueItem | null> {
     return null;
   }
 
-  const item = items[0];
-  const newsletter = item.newsletters;
-  const company = newsletter?.companies;
+  const queueItem = items[0];
+
+  // Then get the newsletter and company details
+  const { data: newsletter, error: newsletterError } = await supabase
+    .from('newsletters')
+    .select(`
+      *,
+      company:company_id (*)
+    `)
+    .eq('id', queueItem.newsletter_id)
+    .single();
+
+  if (newsletterError) {
+    console.error('Error fetching newsletter:', newsletterError);
+    return null;
+  }
+
+  // Combine the data
+  const item: DatabaseQueueItem = {
+    ...queueItem,
+    newsletter
+  };
 
   console.log('Found pending item:', {
     id: item.id,
     newsletter_id: item.newsletter_id,
     section_type: item.section_type,
-    newsletter_subject: newsletter?.subject,
-    company_name: company?.company_name,
-    industry: company?.industry
+    section_number: item.section_number,
+    newsletter_subject: item.newsletter?.subject,
+    company_name: item.newsletter?.company?.company_name
   });
 
   return item;
 }
 
-async function updateQueueItem(id: string, updates: Partial<QueueItem>) {
+async function updateQueueItem(id: string, updates: QueueItemUpdate): Promise<void> {
   const { error } = await supabase
     .from('newsletter_generation_queue')
     .update({
       ...updates,
-      updated_at: new Date().toISOString(),
-      last_attempt_at: new Date().toISOString()
+      updated_at: new Date().toISOString()
     })
     .eq('id', id);
 
@@ -197,275 +142,22 @@ async function updateQueueItem(id: string, updates: Partial<QueueItem>) {
   }
 }
 
-async function getNewsletterInfo(newsletterId: string): Promise<{ newsletter: Newsletter; company: Company }> {
-  const { data: newsletter, error: newsletterError } = await supabase
-    .from('newsletters')
-    .select('*')
-    .eq('id', newsletterId)
-    .single();
-
-  if (newsletterError || !newsletter) {
-    throw new Error('Newsletter not found');
-  }
-
-  const { data: company, error: companyError } = await supabase
-    .from('companies')
-    .select('*')
-    .eq('id', newsletter.company_id)
-    .single();
-
-  if (companyError || !company) {
-    throw new Error('Company not found');
-  }
-
-  return { newsletter, company };
-}
-
-async function processQueueItem(item: QueueItem): Promise<void> {
-  console.log(`Processing queue item ${item.id} for newsletter ${item.newsletter_id}`);
-  
-  try {
-    // Update status to in_progress
-    await updateQueueItemStatus(item.newsletter_id, item.section_type as SectionType, 'in_progress');
-
-    const { data: newsletter, error: newsletterError } = await supabase
-      .from('newsletters')
-      .select(`
-        *,
-        companies:company_id (
-          id,
-          company_name,
-          industry,
-          target_audience,
-          audience_description
-        )
-      `)
-      .eq('id', item.newsletter_id)
-      .single();
-
-    if (newsletterError || !newsletter) {
-      throw new Error('Failed to fetch newsletter details');
-    }
-
-    const company = newsletter.companies;
-    if (!company) {
-      throw new Error('Failed to fetch company details');
-    }
-
-    // Generate content based on section type
-    const config = SECTION_CONFIG[item.section_type as SectionType];
-    if (!config) {
-      throw new Error(`Invalid section type: ${item.section_type}`);
-    }
-
-    console.log(`Generating content for section ${item.section_type}...`);
-    const messages = [
-      {
-        role: 'system',
-        content: `You are a professional newsletter writer. Write content for a ${company.industry} company newsletter. The company name is ${company.company_name}.`
-      },
-      {
-        role: 'user',
-        content: `${config.prompt} for ${company.company_name}. Target audience: ${company.target_audience || 'general audience'}. ${company.audience_description ? `Audience details: ${company.audience_description}` : ''}`
-      }
-    ];
-
-    const content = await callOpenAIWithRetry(messages);
-    console.log(`Generated content for section ${item.section_type}`);
-
-    // Create or update section
-    const sectionData = {
-      newsletter_id: item.newsletter_id,
-      section_type: item.section_type,
-      section_number: config.sectionNumber,
-      content,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    const { error: sectionError } = await supabase
-      .from('newsletter_sections')
-      .upsert(sectionData, {
-        onConflict: 'newsletter_id,section_number'
-      });
-
-    if (sectionError) {
-      throw new Error('Failed to save section content');
-    }
-
-    // Update queue item status to completed
-    await updateQueueItemStatus(item.newsletter_id, item.section_type as SectionType, 'completed');
-
-    console.log(`Successfully processed section ${item.section_type}`);
-
-    // Check if all sections are completed and update newsletter status
-    await updateNewsletterStatus(item.newsletter_id);
-
-  } catch (error) {
-    console.error(`Error processing section ${item.section_type}:`, error);
-    await updateQueueItemStatus(
-      item.newsletter_id,
-      item.section_type as SectionType,
-      'failed',
-      error instanceof Error ? error.message : 'Unknown error'
-    );
-  }
-}
-
-async function updateNewsletterStatus(newsletterId: string): Promise<void> {
-  // Get all sections for the newsletter
-  const { data: sections, error } = await supabase
+async function updateNewsletterSection(id: string, updates: NewsletterSectionUpdate): Promise<void> {
+  const { error } = await supabase
     .from('newsletter_sections')
-    .select('status')
-    .eq('newsletter_id', newsletterId);
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', id);
 
   if (error) {
-    console.error('Error checking newsletter sections:', error);
-    return;
-  }
-
-  // Check if all sections are completed
-  const allCompleted = sections.every(section => section.status === 'completed');
-  if (allCompleted) {
-    // Get newsletter and company info
-    const { newsletter, company } = await getNewsletterInfo(newsletterId);
-
-    // Update newsletter status to ready
-    const { error: updateError } = await supabase
-      .from('newsletters')
-      .update({
-        status: 'ready',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', newsletterId);
-
-    if (updateError) {
-      console.error('Error updating newsletter status:', updateError);
-      return;
-    }
-
-    console.log(`All sections completed for newsletter ${newsletterId}. Starting email send...`);
-
-    // Send the newsletter
-    try {
-      await sendNewsletterEmail(newsletter, company);
-    } catch (error) {
-      console.error('Error sending newsletter:', error);
-    }
-  }
-}
-
-async function sendNewsletterEmail(newsletter: Newsletter, company: Company): Promise<void> {
-  try {
-    console.log(`Preparing to send newsletter ${newsletter.id} for company ${company.company_name}`);
-
-    // Get all sections
-    const sections = await getNewsletterSections(newsletter.id);
-    
-    // Build email content
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .section { margin-bottom: 30px; }
-            h1 { color: #2c3e50; }
-            h2 { color: #34495e; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>${newsletter.subject}</h1>
-            ${sections
-              .sort((a, b) => a.section_number - b.section_number)
-              .map(section => `
-                <div class="section">
-                  <h2>${section.section_type.replace(/_/g, ' ').toUpperCase()}</h2>
-                  ${section.content}
-                </div>
-              `)
-              .join('')}
-          </div>
-        </body>
-      </html>
-    `;
-
-    // Send email using Brevo
-    const apiInstance = new TransactionalEmailsApi();
-    apiInstance.setApiKey(TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY!);
-
-    const sendSmtpEmail = new SendSmtpEmail();
-    sendSmtpEmail.subject = newsletter.subject;
-    sendSmtpEmail.htmlContent = htmlContent;
-    sendSmtpEmail.sender = {
-      name: process.env.BREVO_SENDER_NAME!,
-      email: process.env.BREVO_SENDER_EMAIL!
-    };
-
-    // For draft, send to draft_recipient_email
-    if (newsletter.draft_recipient_email) {
-      sendSmtpEmail.to = [{
-        email: newsletter.draft_recipient_email,
-        name: newsletter.draft_recipient_email.split('@')[0]
-      }];
-    }
-
-    console.log(`Sending email to ${newsletter.draft_recipient_email}`);
-    await apiInstance.sendTransacEmail(sendSmtpEmail);
-    console.log('Email sent successfully');
-
-    // Update newsletter status
-    const { error: updateError } = await supabase
-      .from('newsletters')
-      .update({
-        draft_status: 'sent',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', newsletter.id);
-
-    if (updateError) {
-      console.error('Error updating newsletter status:', updateError);
-      throw updateError;
-    }
-
-  } catch (error) {
-    console.error('Error sending newsletter:', error);
-    
-    // Update newsletter status to error
-    const { error: updateError } = await supabase
-      .from('newsletters')
-      .update({
-        draft_status: 'error',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', newsletter.id);
-
-    if (updateError) {
-      console.error('Error updating newsletter status:', updateError);
-    }
-    
+    console.error('Error updating newsletter section:', error);
     throw error;
   }
 }
 
-async function getNewsletterContacts(companyId: string): Promise<Contact[]> {
-  const { data: contacts, error } = await supabase
-    .from('contacts')
-    .select('*')
-    .eq('company_id', companyId)
-    .eq('status', 'active');
-
-  if (error) {
-    console.error('Error fetching contacts:', error);
-    throw error;
-  }
-
-  return contacts;
-}
-
-async function getNewsletterSections(newsletterId: string): Promise<NewsletterSection[]> {
+async function getNewsletterSections(newsletterId: string): Promise<DatabaseNewsletterSection[]> {
   const { data: sections, error } = await supabase
     .from('newsletter_sections')
     .select('*')
@@ -480,134 +172,252 @@ async function getNewsletterSections(newsletterId: string): Promise<NewsletterSe
   return sections;
 }
 
-async function processQueue(): Promise<void> {
-  console.log('\nProcessing queue...');
-  
-  const item = await getNextPendingItem();
-  if (!item) {
-    return;
-  }
-
-  try {
-    // Update status to in_progress
-    await updateQueueItemStatus(item.newsletter_id, item.section_type as SectionType, 'in_progress');
-
-    console.log(`Processing section ${item.section_type} for newsletter ${item.newsletter_id}`);
-    
-    // Process the item
-    await processQueueItem(item);
-
-  } catch (error) {
-    console.error('Error processing queue item:', error);
-    
-    // Update status to failed
-    await updateQueueItemStatus(
-      item.newsletter_id,
-      item.section_type as SectionType,
-      'failed',
-      error instanceof Error ? error.message : 'Unknown error'
-    );
-  }
+interface DatabaseNewsletterSection {
+  id: string;
+  newsletter_id: string;
+  section_type: string;
+  section_number: number;
+  title?: string;
+  content?: string;
+  status: NewsletterSectionStatus;
+  created_at: string;
+  updated_at: string;
 }
 
-async function checkQueueStatus(): Promise<void> {
-  console.log('Checking queue status...');
-  
-  const { data: queueItems, error } = await supabase
-    .from('newsletter_generation_queue')
-    .select(`
-      *,
-      newsletters:newsletter_id (
-        id,
-        subject,
-        draft_recipient_email,
-        status
-      )
-    `)
-    .neq('status', 'completed')
-    .order('created_at', { ascending: false })
-    .limit(5);
-
-  if (error) {
-    console.error('Error checking queue status:', error);
-    return;
-  }
-
-  if (queueItems && queueItems.length > 0) {
-    console.log('Found pending queue items:');
-    queueItems.forEach(item => {
-      console.log(`- Queue Item ${item.id}:`);
-      console.log(`  Newsletter: ${item.newsletters?.subject}`);
-      console.log(`  Section: ${item.section_type}`);
-      console.log(`  Status: ${item.status}`);
-      console.log(`  Created: ${item.created_at}`);
-      console.log('');
-    });
-  } else {
-    console.log('No pending items in queue');
-  }
-}
-
-async function startProcessor() {
+async function processQueueItems() {
   console.log('Starting queue processor...');
-  await checkQueueStatus();
-  processQueue();
+  console.log('Checking queue status...');
+
+  // First get the queue items
+  const { data: queueItems, error: queueError } = await supabase
+    .from('newsletter_generation_queue')
+    .select('*')
+    .in('status', ['pending', 'failed'])
+    .order('created_at', { ascending: true });
+
+  if (queueError) {
+    console.error('Error fetching queue items:', queueError);
+    return;
+  }
+
+  if (!queueItems || queueItems.length === 0) {
+    console.log('No pending items found.');
+    return;
+  }
+
+  // Then get the newsletters
+  const { data: newsletters, error: newslettersError } = await supabase
+    .from('newsletters')
+    .select('*')
+    .in('id', queueItems.map(item => item.newsletter_id));
+
+  if (newslettersError) {
+    console.error('Error fetching newsletters:', newslettersError);
+    return;
+  }
+
+  // Then get the companies
+  const { data: companies, error: companiesError } = await supabase
+    .from('companies')
+    .select('*')
+    .in('id', newsletters.map(n => n.company_id));
+
+  if (companiesError) {
+    console.error('Error fetching companies:', companiesError);
+    return;
+  }
+
+  // Combine the data
+  const combinedItems = queueItems.map(item => {
+    const newsletter = newsletters?.find(n => n.id === item.newsletter_id);
+    const company = newsletter ? companies?.find(c => c.id === newsletter.company_id) : undefined;
+    return {
+      ...item,
+      newsletter: newsletter ? {
+        ...newsletter,
+        company: company as DatabaseCompany
+      } : undefined
+    } as DatabaseQueueItem;
+  });
+
+  console.log('Found queue items:');
+  for (const item of combinedItems) {
+    console.log(`- Queue Item ${item.id}:`);
+    console.log(`  Newsletter: ${item.newsletter?.subject}`);
+    console.log(`  Section: ${item.section_type}`);
+    console.log(`  Status: ${item.status}`);
+    console.log(`  Created: ${item.created_at}\n`);
+  }
+
+  console.log('\nProcessing queue...');
+  for (const item of combinedItems) {
+    try {
+      if (!item.newsletter) {
+        console.error(`Newsletter not found for queue item ${item.id}`);
+        continue;
+      }
+      await processQueueItem(item);
+    } catch (error) {
+      console.error(`Failed to process queue item ${item.id}:`, error);
+      // Continue with next item
+    }
+  }
 }
 
-startProcessor().catch(error => {
-  console.error('Error starting processor:', error);
-  process.exit(1);
-});
+async function processQueueItem(item: DatabaseQueueItem): Promise<void> {
+  console.log(`Processing queue item ${item.id} for section ${item.section_type}`);
 
-// Set up interval to check for new items
-setInterval(() => {
-  processQueue().catch(error => {
-    console.error('Error in queue processing:', error);
-  });
-}, PROCESS_INTERVAL);
-
-// Handle process termination
-process.on('SIGINT', () => {
-  console.log('\nStopping queue processor...');
-  process.exit();
-});
-
-// Helper function to call OpenAI with retry
-async function callOpenAIWithRetry(messages: any) {
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages,
+    if (!item.newsletter) {
+      throw new Error(`Newsletter not found for queue item ${item.id}`);
+    }
+
+    // Update queue item status to processing
+    await updateQueueItem(item.id, {
+      status: 'processing',
+      attempts: item.attempts + 1,
+      last_attempt_at: new Date().toISOString()
+    });
+
+    if (!item.newsletter.company) {
+      throw new Error(`Failed to fetch company details for newsletter ${item.newsletter.id}`);
+    }
+
+    // Generate section content using OpenAI
+    const prompt = generatePrompt(item.section_type, item.newsletter.company);
+    console.log(`Generating content for section ${item.section_type} of newsletter ${item.newsletter.subject}`);
+    
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional newsletter writer. Write engaging and informative content that is relevant to the target audience.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
       temperature: 0.7,
       max_tokens: 1000
     });
-    return response.choices[0].message.content;
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('Failed to generate content');
+    }
+
+    // Generate title using OpenAI
+    console.log('Generating title for the section...');
+    const titleCompletion = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        {
+          role: 'system',
+          content: 'Generate a short, engaging title for this newsletter section.'
+        },
+        {
+          role: 'user',
+          content: `Content: ${content}\n\nGenerate a title (max 5-7 words):`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 50
+    });
+
+    const title = titleCompletion.choices[0]?.message?.content;
+    if (!title) {
+      throw new Error('Failed to generate title');
+    }
+
+    // Update newsletter section
+    console.log('Updating newsletter section...');
+    const { data: sections, error: sectionsError } = await supabase
+      .from('newsletter_sections')
+      .select('*')
+      .eq('newsletter_id', item.newsletter_id)
+      .eq('section_type', item.section_type)
+      .eq('section_number', item.section_number);
+
+    if (sectionsError) {
+      throw sectionsError;
+    }
+
+    if (!sections || sections.length === 0) {
+      throw new Error('Newsletter section not found');
+    }
+
+    const section = sections[0];
+    await updateNewsletterSection(section.id, {
+      title: title.trim(),
+      content: content.trim(),
+      status: 'completed'
+    });
+
+    // Update queue item status to completed
+    await updateQueueItem(item.id, {
+      status: 'completed',
+      error_message: null
+    });
+
+    console.log(`Successfully processed section ${item.section_type}`);
+
   } catch (error) {
-    console.error('Error calling OpenAI:', error);
-    await sleep(RATE_LIMIT_DELAY);
-    return await callOpenAIWithRetry(messages);
-  }
-}
+    console.error('Error processing queue item:', error);
 
-// Helper function to update queue item status
-async function updateQueueItemStatus(
-  newsletterId: string,
-  sectionType: SectionType,
-  status: 'pending' | 'in_progress' | 'completed' | 'failed',
-  errorMessage?: string
-): Promise<void> {
-  const { error } = await supabase
-    .from('newsletter_generation_queue')
-    .update({
-      status,
-      error_message: errorMessage,
-      updated_at: new Date().toISOString()
-    })
-    .eq('newsletter_id', newsletterId)
-    .eq('section_type', sectionType);
+    // Update queue item status to failed
+    await updateQueueItem(item.id, {
+      status: 'failed',
+      error_message: error instanceof Error ? error.message : 'Unknown error'
+    });
 
-  if (error) {
-    console.error('Error updating queue item status:', error);
     throw error;
   }
 }
+
+function generatePrompt(sectionType: string, company: DatabaseCompany): string {
+  const basePrompt = `Write a newsletter section for ${company.company_name}, a company in the ${company.industry} industry.`;
+  
+  let audienceInfo = '';
+  if (company.target_audience) {
+    audienceInfo += `\nTarget Audience: ${company.target_audience}`;
+  }
+  if (company.audience_description) {
+    audienceInfo += `\nAudience Description: ${company.audience_description}`;
+  }
+
+  let sectionPrompt = '';
+  switch (sectionType) {
+    case 'welcome':
+      sectionPrompt = 'Write a warm welcome message that introduces the newsletter and sets the tone.';
+      break;
+    case 'industry_trends':
+      sectionPrompt = `Write about current trends in the ${company.industry} industry that would be relevant to our audience.`;
+      break;
+    case 'practical_tips':
+      sectionPrompt = `Provide practical tips and actionable advice related to ${company.industry} that would benefit our readers.`;
+      break;
+    default:
+      throw new Error(`Unknown section type: ${sectionType}`);
+  }
+
+  return `${basePrompt}${audienceInfo}\n\n${sectionPrompt}\n\nWrite approximately 300-400 words.`;
+}
+
+// Start queue processor
+async function startQueueProcessor() {
+  console.log('Starting queue processor with configuration:', {
+    openaiKey: process.env.OPENAI_API_KEY ? 'set' : 'not set',
+    supabaseUrl: process.env.SUPABASE_URL ? 'set' : 'not set',
+    supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set' : 'not set',
+    brevoKey: process.env.BREVO_API_KEY ? 'set' : 'not set',
+    brevoEmail: process.env.BREVO_SENDER_EMAIL ? 'set' : 'not set',
+    brevoName: process.env.BREVO_SENDER_NAME ? 'set' : 'not set'
+  });
+
+  await processQueueItems();
+}
+
+// Start the processor
+startQueueProcessor();

@@ -103,7 +103,9 @@ export default function Home() {
           body: JSON.stringify({
             company_id: company[0].id,
             subject: `Newsletter for ${formDataObj.company_name}`,
-            draft_recipient_email: formDataObj.contact_email
+            draft_recipient_email: formDataObj.contact_email,
+            status: 'draft',
+            draft_status: 'draft'
           })
         });
 

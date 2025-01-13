@@ -10,9 +10,7 @@
     "grep": {},
     "grepInvert": null,
     "maxFailures": 1,
-    "metadata": {
-      "actualWorkers": 1
-    },
+    "metadata": {},
     "preserveOutput": "always",
     "reporter": [
       [
@@ -57,264 +55,33 @@
     "workers": 1,
     "webServer": null
   },
-  "suites": [
+  "suites": [],
+  "errors": [
     {
-      "title": "onboarding.test.ts",
-      "file": "onboarding.test.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [],
-      "suites": [
-        {
-          "title": "Onboarding Form Tests",
-          "file": "onboarding.test.ts",
-          "line": 3,
-          "column": 6,
-          "specs": [
-            {
-              "title": "should successfully submit onboarding form",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "chromium",
-                  "projectName": "chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "status": "passed",
-                      "duration": 11738,
-                      "errors": [],
-                      "stdout": [
-                        {
-                          "text": "Navigating to homepage...\n"
-                        },
-                        {
-                          "text": "Page loaded\n"
-                        },
-                        {
-                          "text": "Starting form submission test...\n"
-                        },
-                        {
-                          "text": "Filling required fields...\n"
-                        },
-                        {
-                          "text": "Filling optional fields...\n"
-                        },
-                        {
-                          "text": "Taking pre-submission screenshot...\n"
-                        },
-                        {
-                          "text": "Submitting form...\n"
-                        },
-                        {
-                          "text": "Browser console: log: Form submission started\n"
-                        },
-                        {
-                          "text": "Browser console: log: Form validated, proceeding with submission\n"
-                        },
-                        {
-                          "text": "Browser console: log: Creating company...\n"
-                        },
-                        {
-                          "text": "Network request: POST http://localhost:3001/api/company/create\n"
-                        },
-                        {
-                          "text": "Form submitted\n"
-                        },
-                        {
-                          "text": "Waiting for first success modal...\n"
-                        },
-                        {
-                          "text": "Clicking close button on success modal...\n"
-                        },
-                        {
-                          "text": "Network response: 200 http://localhost:3001/api/company/create\n"
-                        },
-                        {
-                          "text": "Browser console: log: Company created: [Object]\n"
-                        },
-                        {
-                          "text": "Network request: POST http://localhost:3001/api/newsletter/create\n"
-                        },
-                        {
-                          "text": "Network response: 500 http://localhost:3001/api/newsletter/create\n"
-                        },
-                        {
-                          "text": "Browser console: error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)\n"
-                        },
-                        {
-                          "text": "Browser console: error: Failed to create newsletter: {\"error\":\"Failed to create newsletter\"}\n"
-                        },
-                        {
-                          "text": "Waiting for one-submission limit screen...\n"
-                        },
-                        {
-                          "text": "Taking post-submission screenshot...\n"
-                        }
-                      ],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2025-01-05T19:13:06.100Z",
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-6979d-ully-submit-onboarding-form-chromium\\test-finished-1.png"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-6979d-ully-submit-onboarding-form-chromium\\trace.zip"
-                        }
-                      ]
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "71b6f7556e01136dd800-75f7d6b17bd6363e8b54",
-              "file": "onboarding.test.ts",
-              "line": 25,
-              "column": 7
-            },
-            {
-              "title": "should validate form fields",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "chromium",
-                  "projectName": "chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "status": "passed",
-                      "duration": 7517,
-                      "errors": [],
-                      "stdout": [
-                        {
-                          "text": "Navigating to homepage...\n"
-                        },
-                        {
-                          "text": "Page loaded\n"
-                        },
-                        {
-                          "text": "Starting validation test...\n"
-                        },
-                        {
-                          "text": "Testing invalid email...\n"
-                        },
-                        {
-                          "text": "Browser console: log: Form submission started\n"
-                        },
-                        {
-                          "text": "Browser console: log: Validation errors found: {contact_email: Please enter a valid email address}\n"
-                        },
-                        {
-                          "text": "Validation errors: [ \u001b[32m'Please enter a valid email address'\u001b[39m ]\n"
-                        }
-                      ],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2025-01-05T19:13:18.497Z",
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-Tests-should-validate-form-fields-chromium\\test-finished-1.png"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-Tests-should-validate-form-fields-chromium\\trace.zip"
-                        }
-                      ]
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "71b6f7556e01136dd800-8a03b9f8d447c61298c2",
-              "file": "onboarding.test.ts",
-              "line": 85,
-              "column": 7
-            },
-            {
-              "title": "should show validation errors for missing required fields",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "chromium",
-                  "projectName": "chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "status": "passed",
-                      "duration": 4146,
-                      "errors": [],
-                      "stdout": [
-                        {
-                          "text": "Navigating to homepage...\n"
-                        },
-                        {
-                          "text": "Page loaded\n"
-                        },
-                        {
-                          "text": "Starting missing fields validation test...\n"
-                        },
-                        {
-                          "text": "Browser console: log: Form submission started\n"
-                        },
-                        {
-                          "text": "Browser console: log: Validation errors found: {company_name: Company name is required, industry: Industry is required, contact_email: Contact email is required, target_audience: Target audience is required}\n"
-                        }
-                      ],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2025-01-05T19:13:26.105Z",
-                      "attachments": [
-                        {
-                          "name": "screenshot",
-                          "contentType": "image/png",
-                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-80b90-for-missing-required-fields-chromium\\test-finished-1.png"
-                        },
-                        {
-                          "name": "trace",
-                          "contentType": "application/zip",
-                          "path": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\test-results\\onboarding-Onboarding-Form-80b90-for-missing-required-fields-chromium\\trace.zip"
-                        }
-                      ]
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "71b6f7556e01136dd800-a9de562dd9a50c005d1f",
-              "file": "onboarding.test.ts",
-              "line": 110,
-              "column": 7
-            }
-          ]
-        }
-      ]
+      "message": "Error: Do not import `@jest/globals` outside of the Jest test environment",
+      "stack": "Error: Do not import `@jest/globals` outside of the Jest test environment\n    at Object.<anonymous> (c:\\Users\\dell\\node_modules\\@jest\\globals\\build\\index.js:23:7)\n    at Object.<anonymous> (c:\\Users\\dell\\CascadeProjects\\newsletter-app\\tests\\newsletter-generator.test.ts:1:1)",
+      "location": {
+        "file": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\tests\\newsletter-generator.test.ts",
+        "column": 1,
+        "line": 1
+      },
+      "snippet": "   at newsletter-generator.test.ts:1\n\n\u001b[0m\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 1 |\u001b[39m \u001b[36mimport\u001b[39m { describe\u001b[33m,\u001b[39m it\u001b[33m,\u001b[39m expect\u001b[33m,\u001b[39m beforeEach\u001b[33m,\u001b[39m jest } \u001b[36mfrom\u001b[39m \u001b[32m'@jest/globals'\u001b[39m\u001b[33m;\u001b[39m\n \u001b[90m   |\u001b[39m \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 2 |\u001b[39m \u001b[36mimport\u001b[39m { createClient } \u001b[36mfrom\u001b[39m \u001b[32m'@supabase/supabase-js'\u001b[39m\u001b[33m;\u001b[39m\n \u001b[90m 3 |\u001b[39m \u001b[36mimport\u001b[39m { \u001b[33mNewsletterGenerator\u001b[39m\u001b[33m,\u001b[39m createNewsletterGenerator } \u001b[36mfrom\u001b[39m \u001b[32m'../utils/newsletter-generator'\u001b[39m\u001b[33m;\u001b[39m\n \u001b[90m 4 |\u001b[39m \u001b[36mimport\u001b[39m { \u001b[33mAPIError\u001b[39m } \u001b[36mfrom\u001b[39m \u001b[32m'../utils/errors'\u001b[39m\u001b[33m;\u001b[39m\u001b[0m"
+    },
+    {
+      "message": "Error: Do not import `@jest/globals` outside of the Jest test environment",
+      "stack": "Error: Do not import `@jest/globals` outside of the Jest test environment\n    at Object.<anonymous> (c:\\Users\\dell\\node_modules\\@jest\\globals\\build\\index.js:23:7)\n    at Object.<anonymous> (c:\\Users\\dell\\CascadeProjects\\newsletter-app\\tests\\queue-processor.test.ts:1:1)",
+      "location": {
+        "file": "c:\\Users\\dell\\CascadeProjects\\newsletter-app\\tests\\queue-processor.test.ts",
+        "column": 1,
+        "line": 1
+      },
+      "snippet": "   at queue-processor.test.ts:1\n\n\u001b[0m\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 1 |\u001b[39m \u001b[36mimport\u001b[39m { describe\u001b[33m,\u001b[39m it\u001b[33m,\u001b[39m expect\u001b[33m,\u001b[39m beforeEach\u001b[33m,\u001b[39m jest } \u001b[36mfrom\u001b[39m \u001b[32m'@jest/globals'\u001b[39m\u001b[33m;\u001b[39m\n \u001b[90m   |\u001b[39m \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 2 |\u001b[39m \u001b[36mimport\u001b[39m { createClient } \u001b[36mfrom\u001b[39m \u001b[32m'@supabase/supabase-js'\u001b[39m\u001b[33m;\u001b[39m\n \u001b[90m 3 |\u001b[39m \u001b[36mimport\u001b[39m { processQueueItem\u001b[33m,\u001b[39m updateQueueItemStatus } \u001b[36mfrom\u001b[39m \u001b[32m'../workers/queue-processor-v2'\u001b[39m\u001b[33m;\u001b[39m\n \u001b[90m 4 |\u001b[39m \u001b[36mimport\u001b[39m { createNewsletterGenerator } \u001b[36mfrom\u001b[39m \u001b[32m'../utils/newsletter-generator'\u001b[39m\u001b[33m;\u001b[39m\u001b[0m"
     }
   ],
-  "errors": [],
   "stats": {
-    "startTime": "2025-01-05T19:13:04.962Z",
-    "duration": 25776.307,
-    "expected": 3,
+    "startTime": "2025-01-06T18:37:32.174Z",
+    "duration": 320.721,
+    "expected": 0,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0
