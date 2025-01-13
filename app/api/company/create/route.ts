@@ -1,35 +1,64 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client with anon key instead of service role key
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Create a simple test endpoint first
+export async function GET() {
+  try {
+    console.log('Testing Supabase connection...');
+    
+    // Initialize client
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          persistSession: false
+        }
+      }
+    );
+
+    // Log config
+    console.log('Config:', {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    });
+
+    // Try a simple query first
+    const { data, error } = await supabase
+      .from('companies')
+      .select('id')
+      .limit(1);
+
+    if (error) {
+      console.error('Query error:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, data });
+  } catch (error: any) {
+    console.error('Unexpected error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request) {
   try {
-    console.log('Supabase configuration:', {
-      hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL
+    // Initialize client with no session persistence
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          persistSession: false
+        }
+      }
+    );
+
+    // Log config
+    console.log('Supabase config:', {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     });
-
-    // First verify Supabase connection
-    const { data: testData, error: testError } = await supabase
-      .from('companies')
-      .select('count(*)')
-      .limit(1);
-
-    if (testError) {
-      console.error('Supabase connection test failed:', testError);
-      return NextResponse.json(
-        { error: 'Database connection failed', details: testError },
-        { status: 500 }
-      );
-    }
-
-    console.log('Supabase connection successful, proceeding with request');
 
     const rawBody = await request.text();
     console.log('Raw request body:', rawBody);
@@ -59,6 +88,20 @@ export async function POST(request: Request) {
       );
     }
 
+    // Try a simple query first to test connection
+    const { data: testData, error: testError } = await supabase
+      .from('companies')
+      .select('id')
+      .limit(1);
+
+    if (testError) {
+      console.error('Connection test failed:', testError);
+      return NextResponse.json(
+        { error: 'Database connection failed', details: testError },
+        { status: 500 }
+      );
+    }
+
     // Prepare insert data
     const insertData = {
       company_name: body.company_name,
@@ -71,14 +114,14 @@ export async function POST(request: Request) {
     };
     console.log('Attempting to insert:', insertData);
 
-    // Try the insert with explicit error handling
+    // Try the insert
     const { data, error } = await supabase
       .from('companies')
       .insert([insertData])
       .select();
 
     if (error) {
-      console.error('Supabase insert error:', {
+      console.error('Insert error:', {
         message: error.message,
         details: error.details,
         hint: error.hint,
