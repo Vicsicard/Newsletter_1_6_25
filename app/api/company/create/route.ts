@@ -1,25 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// First, verify environment variables
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase configuration:', {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseKey
-  });
-}
-
-// Initialize Supabase client
+// Initialize Supabase client with anon key instead of service role key
 const supabase = createClient(
-  supabaseUrl!,
-  supabaseKey!
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 export async function POST(request: Request) {
   try {
+    console.log('Supabase configuration:', {
+      hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL
+    });
+
     // First verify Supabase connection
     const { data: testData, error: testError } = await supabase
       .from('companies')
@@ -36,7 +31,6 @@ export async function POST(request: Request) {
 
     console.log('Supabase connection successful, proceeding with request');
 
-    // Parse and log request body
     const rawBody = await request.text();
     console.log('Raw request body:', rawBody);
     
@@ -77,10 +71,10 @@ export async function POST(request: Request) {
     };
     console.log('Attempting to insert:', insertData);
 
-    // Try the insert
+    // Try the insert with explicit error handling
     const { data, error } = await supabase
       .from('companies')
-      .insert(insertData)
+      .insert([insertData])
       .select();
 
     if (error) {
